@@ -1,0 +1,12 @@
+To compile:
+
+gcc -o yaircd client.c client_list.c yaircd.c -Wall -lpthread
+
+To run:
+
+./yaircd
+
+After that, open up a few terminals and try:
+telnet 127.0.0.1 6667
+
+type in a few messages and check that they are received in every connected terminal.
