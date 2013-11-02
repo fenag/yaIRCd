@@ -1,3 +1,7 @@
+--- WARNING ---
+
+This is an ongoing project. It is still in an early development stage. The IRC Server is not compatible with irc clients yet.
+
 To compile:
 
 gcc -o yaircd client.c client_list.c yaircd.c -Wall -lpthread
