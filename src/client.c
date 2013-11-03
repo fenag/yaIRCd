@@ -32,6 +32,7 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 	char msg_buf[MAX_MSG_SIZE];
 	int msg_size;
 	struct irc_client *client;
+	char *tmp; /* TEMPORARY - workaround for notify_all_clients after destroying a session */
 	
     if (revents & EV_ERROR) {
         fprintf(stderr, "::client.c:manage_client_messages(): unexpected EV_ERROR on client event watcher\n");
@@ -46,7 +47,25 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 	
 	msg_size = read(client->socket_fd, msg_buf, sizeof(msg_buf));
 	
-	if (strcmp(msg_buf, ":quit\r\n") == 0) {
+	if (msg_size == 0) {
+		/* Broken pipe - client process ended abruptly */
+		tmp = strdup(client->nick);
+		destroy_client(client);
+		notify_all_clients("[QUITTING - Broken Pipe]\n", tmp, 25);
+		free(tmp);
+		return;
+	}
+	
+	if (msg_size == -1) {
+		perror("::client.c:manage_client_messages(): error while attempting to read from socket");
+		tmp = strdup(client->nick);
+		destroy_client(client);
+		notify_all_clients("[QUITTING - Fatal error]\n", tmp, 25);
+		free(tmp);
+		return;
+	}
+	
+	if (msg_buf[0] == 'q') {
 		notify_all_clients("[QUITTING]\n", client->nick, 11);
 		destroy_client(client);
 		return;
@@ -69,7 +88,7 @@ static struct irc_client *new_client_connection(char *ip_addr, int socket) {
 	strcpy(new_client->nick, n);
 	n[0]++;
 	new_client->username = "developer";
-	new_client->server = "mantissa bits rule the world!";
+	new_client->server = "development.yaircd.org";
 	new_client->socket_fd = socket;
 	
 	new_client->ev_loop = ev_loop_new(0);
@@ -79,13 +98,14 @@ static struct irc_client *new_client_connection(char *ip_addr, int socket) {
 	client_list_add(new_client);
 	
 	sprintf(temp, "Hello. I am a basic IRC Server, take it easy on me!\n"
-	"You are connecting from %s\n"
-	"Your nickname is %s\n"
-	"Your realname is %s"
-	"Your username is %s\n"
-	"You are on server %s\n"
+	"Your full identification for me is: %s!%s@%s\n"
+	"You are connecting from: %s\n"
+	"Your nickname is: %s\n"
+	"Your realname is: %s\n"
+	"Your username is: %s\n"
+	"You are on server: %s\n"
 	"Type in your message. Enjoy your chatting session!\n",
-	new_client->hostname, new_client->nick, new_client->realname, new_client->username, new_client->server);
+	new_client->nick, new_client->username, new_client->hostname, new_client->hostname, new_client->nick, new_client->realname, new_client->username, new_client->server);
 
 	write(new_client->socket_fd, temp, strlen(temp));
 	
