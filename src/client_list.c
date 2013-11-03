@@ -5,6 +5,10 @@
 #include <string.h>
 #define MAX_FILES_OPEN 1024
 
+/* TODO -- URGENT
+These functions are called by multiple threads, and they do not ensure atomicity.
+*/
+
 struct client_lst {
 	struct irc_client *client;
 	struct client_lst *next;
@@ -31,6 +35,27 @@ void client_list_add(struct irc_client *new_client) {
 	pos = hash(new_client->nick);
 	new_element->next = clients[pos];
 	clients[pos] = new_element;
+}
+
+void client_list_delete(struct irc_client *client) {
+	struct client_lst *curr, *prev;
+	int pos;
+	
+	pos = hash(client->nick);
+	
+	for (prev = NULL, curr = clients[pos]; curr != NULL && curr->client != client; prev = curr, curr = curr->next)
+		; /* Intentionally left blank */
+	if (curr == NULL) {
+		/* Huh?! ... no such client */
+		return;
+	}
+	if (prev != NULL) {
+		prev->next = curr->next;
+	}
+	else {
+		clients[pos] = curr->next;
+	}
+	free(curr);
 }
 
 void notify_all_clients(char *msg, char *nick, int msg_size) {
