@@ -1,7 +1,11 @@
 #ifndef __IRC_CLIENT_GUARD__
 #define __IRC_CLIENT_GUARD__
 
+#include <ev.h>
+
 struct irc_client {
+	struct ev_io ev_watcher; /* libev watcher for this client's socket */
+	struct ev_loop *ev_loop; /* libev loop for this client's thread */
 	char *realname;
 	char *hostname;
 	char *nick;
