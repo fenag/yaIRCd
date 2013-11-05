@@ -10,21 +10,20 @@
 char n[] = "a"; /* TEMP - nick generator */
 
 static void manage_client_messages(EV_P_ ev_io *watcher, int revents);
-static struct irc_client *new_client_connection(char *ip_addr, int socket);
+static int new_client_connection(char *ip_addr, int socket);
 static void destroy_client(struct irc_client *client);
 static void free_client(struct irc_client *client);
 
 void *new_client(void *args) {
 	struct irc_client_args_wrapper *arguments = (struct irc_client_args_wrapper *) args;
-	struct irc_client *client;
+	int ret;
 	
-	client = new_client_connection(arguments->ip_addr, arguments->socket);
+	ret = new_client_connection(arguments->ip_addr, arguments->socket);
 	free(args);
 	
-	if (client == NULL) {
+	if (ret == 0) {
 		fprintf(stderr, "::client.c:new_client(): Could not allocate memory for new client\n");
 	}
-	
 	return NULL;
 }
 
@@ -74,13 +73,13 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 	notify_all_clients(msg_buf, client->nick, msg_size);
 }
 
-static struct irc_client *new_client_connection(char *ip_addr, int socket) {
+static int new_client_connection(char *ip_addr, int socket) {
 
 	struct irc_client *new_client;
 	char temp[MAX_MSG_SIZE];
 	
 	if ((new_client = malloc(sizeof(struct irc_client))) == NULL)
-		return NULL;
+		return 0;
 		
 	new_client->realname = "Just a test";
 	new_client->hostname = ip_addr;
@@ -112,7 +111,12 @@ static struct irc_client *new_client_connection(char *ip_addr, int socket) {
 	/* Wait for messages coming from client */
 	ev_run(new_client->ev_loop, 0);
 	
-	return new_client;
+	/* When we get here, the loop was broken by destroy_client(), we can now free it */
+	ev_loop_destroy(new_client->ev_loop);
+	
+	free(new_client);
+	
+	return 1;
 }
 
 static void destroy_client(struct irc_client *client) {
@@ -130,6 +134,4 @@ static void free_client(struct irc_client *client) {
 	
 	ev_io_stop(client->ev_loop, &client->ev_watcher); /* Stop the callback mechanism */
 	ev_break(client->ev_loop, EVBREAK_ONE); /* Stop iterating */
-	
-	free(client);
 }

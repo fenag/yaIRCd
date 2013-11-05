@@ -9,32 +9,19 @@
 		<h3 style="text-align: center;">Last update: November 2013</h3>
 		<h1>Table of Contents</h1>
 		<p><a href="#S1">1 Introduction</a></p>
-		<p><a href="#S2">2 What you need to know</a></p>
+		<p><a href="#S2">2 Submitting Code</a></p>
 		<p><a href="#S3">3 Overview</a></p>
 		<p><a href="#S4">4 Modules</a></p>
 		<blockquote><p><a href="#S4_1">4.1 The module API: a brief description</a></p></blockquote>
 		<blockquote><p><a href="#S4_2">4.2 Adding features</a></p></blockquote>
 		<blockquote><blockquote><p><a href="#S4_2_1">4.2.1 COMMAND</a></p></blockquote></blockquote>
-		<blockquote><blockquote><p><a href="#S4_2_2">4.2.2 SNOMASK</a></p></blockquote></blockquote>
-		<blockquote><blockquote><p><a href="#S4_2_3">4.2.3 UMODE</a></p></blockquote></blockquote>
-		<blockquote><blockquote><p><a href="#S4_2_4">4.2.4 CMDOVERRIDE</a></p></blockquote></blockquote>
-		<blockquote><blockquote><p><a href="#S4_2_5">4.2.5 EXTBAN</a></p></blockquote></blockquote>
-		<blockquote><blockquote><p><a href="#S4_2_6">4.2.6 CMODE</a></p></blockquote></blockquote>
-		<blockquote><p><a href="#S4_2">4.2 Hooks</a></p></blockquote>
-		<blockquote><p><a href="#S4_1">4.2 Hooks</a></p></blockquote>
-		<blockquote><p><a href="#S4_1">4.3 Callbacks</a></p></blockquote>
-		<blockquote><p><a href="#S4_1">4.4 Efunctions</a></p></blockquote>
-		<blockquote><p><a href="#S4_1">4.5 Writing modules</a></p></blockquote>
-		<blockquote><p><a href="#S4_2">4.6 A "Hello World" sample module</a></p></blockquote>
 		<hr/>
 		<h1><a name="S1"></a>1 Introduction</h1>
-		<p>This document describes the UnrealIRCd server-to-server protocol.</p>
-		<h2>A word about clocks.</h2>
-		<p>Unreal is very time-dependant. Users and channels, for example, are timestamped, and if server clocks are not synchronized properly, things can go very wrong very fast. See <a href="http://vulnscan.org/UnrealIrcd/faq/#67">http://vulnscan.org/UnrealIrcd/faq/#67</a> for more information on this. Note that there is a slight difference between server time and what is actually reported by the UNIX date command or by the C time() function. Unreal can apply an offset to the real time to create the server time, allowing servers to be virtually synchronized when synchronizing the real clocks is not possible (such as on shell servers).
-			I should make it quite clear that GMT time is used for everything. To be specific, timestamps in unreal are 32-bit integer values (actually, however many bits the time_t type is, which is 32 on 32-bit systems such as x86). This integer value is the number of seconds that have elapsed since Midnight January 1, 1970 GMT (can be referred to as Epoch time in the UNIX world). This means that timezones are no problem, nor is daylight savings time (or whatever your country of choice calls it).</p>
-		<hr/>
-		<h1><a name="S2"></a>2 Server Negotiation</h1>
-		<p>The first step to establish a server-to-server communication is to negotiate the connection as a server. Negotiation is done using standard IRC commands - no PROTOCTL options are in force until the link is established. The first step is to open a TCP/IP connection to the target server. The target port must be one described by a listen {} block in the remote server's configuration, and that listen block must not have the clientsonly option. After the connection is open, you will be treated as any other connection and be greeted with the "Looking up your hostname..." and "Checking identd..." notices as you would for a client. As these are NOTICE messages and your session as a server isn't established, they should simply be ignored. Use the commands below to introduce a server connection.</p>
+		<p>This document describes yaIRCd's code architecture. It is intended to help new developers getting up to speed on the existing code base.</p>
+		<p>It is assumed that RFC 1459, describing the IRC protocol, has been read. Please refer to doc/rfc.html to check it. Developers are also recommended to read about libev, since that's what is used to implement timeouts, callback mechanisms, and other important concepts throughout the code. You can check libev's documentation in doc/libev.htm - to get up to speed, give a look at the section "WHAT TO READ WHEN IN A HURRY".</p>
+		<p>Some basic knowledge of how to use Git is required to work on the code base and submitting patches.</p>
+		<h1><a name="S2"></a>2 Submitting Code</h1>
+		<p>TODO write this section</p>
 		<h2><a name="S2_1"></a>2.1 PASS - Connection Password</h2>
 		<p><b>Syntax:</b> <tt>PASS :<i>link password</i></tt></p>
 		<p>The PASS command is used to transmit the password required for a server link. It must match the password specified in the remote server's link::password-receive (which can be crypted), otherwise the link will be rejected. This should be the first message sent.</p>

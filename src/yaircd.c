@@ -26,9 +26,9 @@ int main(int argc, char *argv[]) {
 	int portno = 6667; /* TODO put this in configuration file options */
 	
 	/* Libev stuff */
-	struct ev_loop *loop = EV_DEFAULT;
+	struct ev_loop *loop;
 	struct ev_io socket_watcher;
-	
+
 	mainsock_fd = socket(AF_INET, SOCK_STREAM, 0);
 	
 	if (mainsock_fd < 0) {
@@ -45,10 +45,12 @@ int main(int argc, char *argv[]) {
 	if (bind(mainsock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
 		fprintf(stderr, "::yaircd.c:main(): Could not bind on socket with port %d. Please make sure this port is free, and that the IP you're binding to is valid.\n", portno);
 		perror("Error summary");
+		close(mainsock_fd);
 		return 1;
 	}
 	if (listen(mainsock_fd, SOCK_MAX_HANGUP_CLIENTS) == -1) {
 		perror("::yaircd.c:main(): Could not listen on main socket");
+		close(mainsock_fd);
 		return 1;
 	}
 	clilen = sizeof(cli_addr);
@@ -64,14 +66,16 @@ int main(int argc, char *argv[]) {
 	pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_DETACHED);
 	
 	/* At this point, we're ready to accept new clients. Set the callback function for new connections */
+	loop = EV_DEFAULT;
 	ev_io_init(&socket_watcher, connection_cb, mainsock_fd, EV_READ);
 	ev_io_start(loop, &socket_watcher);
 	
 	/* Now we just have to sit and wait */
-	ev_run(loop, 0);
+	ev_loop(loop, 0);
 	
 	/* TODO Figure out a better spot to place these */
 	pthread_attr_destroy(&thread_attr);
+	ev_loop_destroy(loop);
 	close(mainsock_fd);
 	return 0;
 }
@@ -118,6 +122,7 @@ static void connection_cb(EV_P_ ev_io *w, int revents) {
 	
 	if (pthread_create(&thread_id, &thread_attr, new_client, (void *) thread_arguments) < 0) {
 		perror("::yaircd.c:connection_cb(): could not create new thread");
+		close(newsock_fd);
 		return;
 	}
 }
