@@ -21,14 +21,15 @@ static pthread_attr_t thread_attr;
 
 static void connection_cb(EV_P_ ev_io *w, int revents);
 
-int main(int argc, char *argv[]) {
-	
+int ircd_boot(void) {
 	int portno = 6667; /* TODO put this in configuration file options */
 	
 	/* Libev stuff */
 	struct ev_loop *loop;
 	struct ev_io socket_watcher;
 
+	fclose(stdin);
+	
 	mainsock_fd = socket(AF_INET, SOCK_STREAM, 0);
 	
 	if (mainsock_fd < 0) {
@@ -42,6 +43,7 @@ int main(int argc, char *argv[]) {
 	
 	/* Store port number in network byte order */
 	serv_addr.sin_port = htons(portno);
+	
 	if (bind(mainsock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
 		fprintf(stderr, "::yaircd.c:main(): Could not bind on socket with port %d. Please make sure this port is free, and that the IP you're binding to is valid.\n", portno);
 		perror("Error summary");
@@ -64,7 +66,6 @@ int main(int argc, char *argv[]) {
 	
 	/* We want detached threads */
 	pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_DETACHED);
-	
 	/* At this point, we're ready to accept new clients. Set the callback function for new connections */
 	loop = EV_DEFAULT;
 	ev_io_init(&socket_watcher, connection_cb, mainsock_fd, EV_READ);
@@ -73,11 +74,22 @@ int main(int argc, char *argv[]) {
 	/* Now we just have to sit and wait */
 	ev_loop(loop, 0);
 	
-	/* TODO Figure out a better spot to place these */
+	/* TODO Figure out a better spot to place these - add a SIGKILL handler */
 	pthread_attr_destroy(&thread_attr);
 	ev_loop_destroy(loop);
 	close(mainsock_fd);
+	
 	return 0;
+}
+
+int main(int argc, char *argv[]) {
+	if (daemon(1,0) == -1) {
+		perror("::yaircd.c:main(): Could not daemonize");
+		return 1;
+	}
+	else {
+		return ircd_boot();
+	}
 }
 
 static void connection_cb(EV_P_ ev_io *w, int revents) {
