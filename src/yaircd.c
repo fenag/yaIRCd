@@ -11,18 +11,45 @@
 #include <ev.h>
 #include <string.h>
 #include "client/client.h"
+
+/** @file
+	@brief Main IRCd code
+
+	Where it all begins. The functions in this file are responsible for booting the IRCd.
+	A daemon process is created. This process will be awaken by `libev`'s callback mechanism when a new
+	connection request arrives. When that happens, a new thread is created to deal with our fortunate new client,
+	and the main process goes back to rest until another client pops in and the whole cycle repeats.
+	
+	@author Filipe Goncalves
+	@date November 2013
+	@todo See how to daemonize properly. Read http://www-theorie.physik.unizh.ch/~dpotter/howto/daemonize
+	@todo Think about adding configuration file support (.conf)
+	@todo Allow to bind for multiple IPs
+*/
+
+/** How many clients are allowed to be waiting while the main process is creating a thread for a freshly arrived user. This can be safely incremented to 5 */
 #define SOCK_MAX_HANGUP_CLIENTS 3
 
-static int mainsock_fd;
-static socklen_t clilen;
-static struct sockaddr_in serv_addr;
-static struct sockaddr_in cli_addr;
-static pthread_attr_t thread_attr;
+static int mainsock_fd; /**<Main socket file descriptor, where new connection request arrive */
+static struct sockaddr_in serv_addr; /**<This node's address, namely, the IP and port where we will be listening for new connections. */
+static struct sockaddr_in cli_addr; /**<The client address structure that will hold information for new connected users. */
+static socklen_t clilen; /**<Length of the client's address. This is needed for `accept()` */
+static pthread_attr_t thread_attr; /**<Threads creation attributes. We use detached threads, since we're not interested in calling `pthread_join()`. */
 
 static void connection_cb(EV_P_ ev_io *w, int revents);
 
+/** The core. This function sets it all up. It creates the main socket, assigning it to `mainsock_fd`, and fills `serv_addr` with the necessary fields.
+	Currently, configuration files are not supported, so the socket created listens on all IPs on port 6667.
+	The threads attributes variable, `thread_attr` is initialized with `PTHREAD_CREATE_DETACHED`, since we won't be joining any thread.
+	The main socket is not polled for new clients; instead, `libev` is used with a watcher that calls `connection_cb` when a new connection request arrives. Default events loop is used.
+	@return `1` on error; `0` otherwise
+	@todo Figure out if `pthread_attr_destroy` and `ev_loop_destroy` should really be in here.
+	@todo Add a SIGKILL handler using `libev`. This is sort of urgent - everytime we stop the daemon, the main socket remains open until the operating system kills it for idling.
+		  It is especially annoying when we want to run the daemon again and it throws an error because the previous socket is still opened.
+	@todo Think about IRCd logging features
+*/
 int ircd_boot(void) {
-	int portno = 6667; /* TODO put this in configuration file options */
+	int portno = 6667;
 	
 	/* Libev stuff */
 	struct ev_loop *loop;
@@ -39,7 +66,7 @@ int ircd_boot(void) {
 	
 	bzero((char *) &serv_addr, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY); /* TODO add configuration file support to bind to multiple IPs */
+	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	
 	/* Store port number in network byte order */
 	serv_addr.sin_port = htons(portno);
@@ -74,7 +101,6 @@ int ircd_boot(void) {
 	/* Now we just have to sit and wait */
 	ev_loop(loop, 0);
 	
-	/* TODO Figure out a better spot to place these - add a SIGKILL handler */
 	pthread_attr_destroy(&thread_attr);
 	ev_loop_destroy(loop);
 	close(mainsock_fd);
@@ -82,7 +108,10 @@ int ircd_boot(void) {
 	return 0;
 }
 
-int main(int argc, char *argv[]) {
+/** Creates a daemon process and boots the ircd by calling `ircd_boot()`
+	@return `0` in case of success; `1` if an error ocurred
+*/
+int main(void) {
 	if (daemon(1,0) == -1) {
 		perror("::yaircd.c:main(): Could not daemonize");
 		return 1;
@@ -92,6 +121,19 @@ int main(int argc, char *argv[]) {
 	}
 }
 
+
+/** Callback function that is called when new clients arrive. It accepts the new connection and wraps the client's information in a dynamically allocated `irc_client_args_wrapper` structure to be passed to
+	`pthread_create()`. Every new client gets a dedicated thread whose starting point is `new_client()`.
+	This function returns prematurely if:
+		<ul>
+			<li>an `EV_ERROR` occurred, or `EV_READ` was not set for some reason;</li>
+			<li>`accept()` returned an error code and no socket could be created;</li>
+			<li>the client address is malformed, namely, its family is not `AF_INET`;</li>
+			<li>the operating system reports that no thread could be created.</li>
+		</ul>
+	@param w The watcher that caused this callback to execute. Always comes from the main default loop.
+	@param revents Bit flags reported by `libev`. Can be `EV_ERROR` or `EV_READ`.
+*/
 static void connection_cb(EV_P_ ev_io *w, int revents) {
     int newsock_fd;
 	struct irc_client_args_wrapper *thread_arguments; /* Wrapper for passing arguments to thread function */
@@ -114,10 +156,6 @@ static void connection_cb(EV_P_ ev_io *w, int revents) {
 		perror("::yaircd.c:connection_cb(): Error while accepting new client connection");
 		return;
 	}
-	
-	/* TODO - think about ircd logging features
-	   log("*** Client connected");
-	*/
 	
 	if (cli_addr.sin_family != AF_INET) {
 		/* This should never happen */

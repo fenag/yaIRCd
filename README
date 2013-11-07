@@ -6,13 +6,16 @@ Dependencies:
 libpthread, libev
 
 To compile:
-gcc -o yaircd client.c client_list.c yaircd.c -Wall -lpthread -lev
+make
+
+To generate documentation:
+make doc
 
 To run:
 
-./yaircd
+./yaircd.out
 
 After that, open up a few terminals and try:
 telnet 127.0.0.1 6667
 
-type in a few messages and check that they are received in every connected terminal. To close your connection, type q
+Type in a few messages and check that they are received in every connected terminal. To close your connection, type q
