@@ -14,8 +14,8 @@
 	<p>This document describes yaIRCd's code architecture. It is intended to help new developers getting up to speed on the existing code base.</p>
 	<p>It is assumed that RFC 1459, describing the IRC protocol, has been read. Please refer to doc/rfc.html to check it. Developers are also recommended to read about libev, since that's what is used to implement timeouts, callback mechanisms, and other important concepts throughout the code. You can check libev's documentation in doc/libev.htm - to get up to speed, give a look at the section "WHAT TO READ WHEN IN A HURRY".</p>
 	<p>
-	A strong effort has been made to maintain the code splint clean. This means that at every moment, code in the repository is required to pass checks performed by splint without any error or warning.
-	Thus, developers are encouraged to read splint manual, which can be found in doc/splint_man.pdf. Submitted code shall be splint compliant, and must use annotations to convey proper information to splint.
+	A strong effort has been made to maintain the code valgrind clean. This means that at every moment, code in the repository is required to pass checks performed by valgrind without any error or warning.
+	The only exception is for the error "Address is just below the stack ptr" in ev_run(), which has been reported as a bug in valgrind.
 	</p>
 	<p>Some basic knowledge of how to use Git is required to work on the code base and submitting patches.</p>
 	<p>
@@ -23,8 +23,7 @@
 		<ul>
 			<li>Compiles without warnings when using -Wall under gcc</li>
 			<li>Is documented with doxygen, including static functions</li>
-			<li>Passes splint checks without any error or warning</li>
-			<li>TODO add C beautifier in the future, so that coding style is the same across every file (and enforce rules such as no IFs, WHILEs, etc, without braces; only 1 instruction per line; no instructions with side effects such as a[i++] = ...)</li>
+			<li>Passes valgrind checks without any error or warning</li>
 		</ul>
 	</p>
 */
