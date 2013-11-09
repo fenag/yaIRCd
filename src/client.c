@@ -1,11 +1,13 @@
-#include "client/client.h"
-#include "client/client_list.h"
-#include "protocol/limits.h"
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <ev.h>
+#include "client.h"
+#include "client_list.h"
+#include "protocol.h"
+#include "wrappers.h"
+#include "parsemsg.h"
 
 /** @file
 	@brief Implementation of functions that deal with irc clients
@@ -15,9 +17,10 @@
 	
 	@author Filipe Goncalves
 	@date November 2013
+	@todo Implement timeouts
+	@todo Move client message exchanching routines to another file
+	@todo Implement IRC commands :)
 */
-
-char n[] = "a"; /* TEMP - nick generator */
 
 static void manage_client_messages(EV_P_ ev_io *watcher, int revents);
 static int new_client_connection(char *ip_addr, int socket);
@@ -42,6 +45,13 @@ void *new_client(void *args) {
 	return NULL;
 }
 
+/** Temp. This has to be rewritten */
+static void print_err_reply(struct irc_client *client, numreply_t reply) {
+	char str[4];
+	sprintf(str, NUMREPLY_T_FORMAT, reply);
+	write(client->socket_fd, str, (size_t) 3);
+}
+
 /** The core function that deals with a client. This is the callback function for a client's connection (previously set by `new_client_connection()`). It is automagically called everytime something
 	fresh and interesting to read arrives at the client's socket, or everytime connection to this client was lost for some reason (process died silently, TCP connection broken, etc.).
 	It parses and interprets the client's message according to the official RFC, and sends a reply (if there is one to send, some commands do not require a reply).
@@ -53,12 +63,19 @@ void *new_client(void *args) {
 	@param watcher The watcher that brought this callback function to life. This argument is safely casted to `struct irc_client *`, since the watcher field is the first in `struct irc_client`. This is safe and it
 	works because the watcher is embedded inside each client's struct.
 	@param revents Flags provided by `libev` describing what happened. In case of `EV_ERROR`, or if `EV_READ` is not set, the function prints an error message and returns prematurely.
+	@todo Handle optional PASS command in connection registration. Discuss what should happen when a PASS command is issued, but the server does not require a password.
+	@todo Implement ERR_NICKNAMEINUSE, ERR_ERRONEUSNICKNAME, and ERR_NICKCOLLISION
 */
 static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
-	char msg_buf[MAX_MSG_SIZE];
-	int msg_size;
+	char msg_in[MAX_MSG_SIZE+1];
+	ssize_t msg_size;
 	struct irc_client *client;
-	char *tmp; /* TEMPORARY - workaround for notify_all_clients after destroying a session */
+	/* Stuff needed to parse message */
+	int params_no;
+	int parse_res;
+	char *prefix;
+	char *cmd;
+	char *params[MAX_IRC_PARAMS];
 	
     if (revents & EV_ERROR) {
         fprintf(stderr, "::client.c:manage_client_messages(): unexpected EV_ERROR on client event watcher\n");
@@ -68,44 +85,75 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 		fprintf(stderr, "::client.c:manage_client_messages(): EV_READ not present, but there was no EV_ERROR, ignoring message\n");
 		return;
 	}
-	
 	client = (struct irc_client *) watcher;
-	
-	msg_size = read(client->socket_fd, msg_buf, sizeof(msg_buf));
-	
+	msg_size = read(client->socket_fd, msg_in, (size_t) MAX_MSG_SIZE);
 	if (msg_size == 0) {
 		/* Broken pipe - client process ended abruptly */
-		tmp = strdup(client->nick);
 		destroy_client(client);
-		notify_all_clients("[QUITTING - Broken Pipe]\n", tmp, 25);
-		free(tmp);
 		return;
 	}
-	
 	if (msg_size == -1) {
 		perror("::client.c:manage_client_messages(): error while attempting to read from socket");
-		tmp = strdup(client->nick);
-		destroy_client(client);
-		notify_all_clients("[QUITTING - Fatal error]\n", tmp, 25);
-		free(tmp);
-		return;
-	}
-	
-	if (msg_buf[0] == 'q') {
-		notify_all_clients("[QUITTING]\n", client->nick, 11);
 		destroy_client(client);
 		return;
 	}
+	/* assert: msg_size > 0 && msg_size <= MAX_MSG_SIZE
+	   It is safe to write to msg_in[msg_size] since we have space for MAX_MSG_SIZE+1 chars
+	*/
+	msg_in[msg_size] = '\0'; /* Ensures the message is null-terminated, as required by parsemsg() */
+	parse_res = parse_msg(msg_in, msg_size, &prefix, &cmd, params, &params_no);
 	
-	notify_all_clients(msg_buf, client->nick, msg_size);
+	if (client->is_registered == 0) {
+		if (parse_res == -1) {
+			/* RFC Section 4.1: until the connection is registered, the server must respond to any non-registration commands with ERR_NOTREGISTERED */
+			print_err_reply(client, ERR_NOTREGISTERED);
+			return;
+		}
+		else if (strcasecmp(cmd, ==, "nick")) {
+			/* TODO Implement ERR_NICKNAMEINUSE, ERR_ERRONEUSNICKNAME, and ERR_NICKCOLLISION */
+			if (params_no < 1) {
+				print_err_reply(client, ERR_NONICKNAMEGIVEN);
+				return;
+			}
+			else {
+				client->nick = strdup(params[0]);
+			}
+		}
+		else if (strcasecmp(cmd, ==, "user")) {
+			if (params_no < 4) {
+				print_err_reply(client, ERR_NEEDMOREPARAMS);
+				return;
+			}
+			else {
+				client->username = strdup(params[0]);
+				client->realname = strdup(params[3]);
+			}
+		}
+		else {
+			print_err_reply(client, ERR_NOTREGISTERED);
+			return;
+		}
+		if (client->nick != NULL && client->username != NULL && client->realname != NULL) {
+			client->is_registered = 1;
+		}
+	}
+	else {
+		if (msg_in[0] == 'q') {
+			notify_all_clients("[QUITTING]\n", client->nick, 11);
+			destroy_client(client);
+			return;
+		}
+		/* This is old crap, god knows what others will get after calling parsemg()... TODO fix this */
+		notify_all_clients(msg_in, client->nick, msg_size);
+	}
 }
 
-/** This is the function that gets called by `new_client()` to create a new client instance. It allocs memory for a new `irc_client` instance and initializes every field, including `ev_watcher` and `ev_loop`.
+/** This is the function that gets called by `new_client()` to create a new client instance. It allocs memory for a new `irc_client` instance and initializes the `hostname`, `socket_fd`, `ev_loop` and `ev_watcher` fields.
 	`ev_loop` is a regular loop created with `ev_loop_new(0)`.
 	`ev_watcher` is initialized with `manage_client_messages()` as a callback function.
 	Note that, as a consequence, every client's thread will hold a loop of its own to manage this client's network I/O.
 	It also adds the new client to the list of known connected users.
-	After greeting the new user, it begins execution of the events loop. Thus, this function will not return until the loop is broken, which is done by `manage_client_messages()`. When that happens, the loop is
+	After initializing the new user, it begins execution of the events loop. Thus, this function will not return until the loop is broken, which is done by `manage_client_messages()`. When that happens, the loop is
 	destroyed, and every resource that was alloced for this client is `free()`'d.
 	@param ip_addr A characters sequence describing the client's IP address. IPv4 only.
 	@param socket socket file descriptor for the new client.
@@ -113,48 +161,31 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 			`1` if everything worked smoothly
 */
 static int new_client_connection(char *ip_addr, int socket) {
-
 	struct irc_client *new_client;
-	char temp[MAX_MSG_SIZE];
-	
 	if ((new_client = malloc(sizeof(struct irc_client))) == NULL)
 		return 0;
-		
-	new_client->realname = "Just a test";
+
 	new_client->hostname = ip_addr;
-	new_client->nick = malloc(2);
-	strcpy(new_client->nick, n);
-	n[0]++;
-	new_client->username = "developer";
-	new_client->server = "development.yaircd.org";
 	new_client->socket_fd = socket;
-	
 	new_client->ev_loop = ev_loop_new(0);
+	new_client->server = NULL; /* local client */
+	new_client->is_registered = 0;
+	
+	/* Initialize unknown information - wait for client registration */
+	new_client->realname = NULL;
+	new_client->nick = NULL;
+	new_client->username = NULL;
+	
 	ev_io_init(&new_client->ev_watcher, manage_client_messages, socket, EV_READ);
 	ev_io_start(new_client->ev_loop, &new_client->ev_watcher);
 
 	client_list_add(new_client);
 	
-	sprintf(temp, "Hello. I am a basic IRC Server, take it easy on me!\n"
-	"Your full identification for me is: %s!%s@%s\n"
-	"You are connecting from: %s\n"
-	"Your nickname is: %s\n"
-	"Your realname is: %s\n"
-	"Your username is: %s\n"
-	"You are on server: %s\n"
-	"Type in your message. Enjoy your chatting session!\n",
-	new_client->nick, new_client->username, new_client->hostname, new_client->hostname, new_client->nick, new_client->realname, new_client->username, new_client->server);
-
-	write(new_client->socket_fd, temp, strlen(temp));
-	
 	/* Wait for messages coming from client */
 	ev_run(new_client->ev_loop, 0);
-	
 	/* When we get here, the loop was broken by destroy_client(), we can now free it */
 	ev_loop_destroy(new_client->ev_loop);
-	
 	free(new_client);
-	
 	return 1;
 }
 
@@ -176,13 +207,12 @@ static void destroy_client(struct irc_client *client) {
 	@param client The client to free
 */
 static void free_client(struct irc_client *client) {
-	/*free(client->realname);*/ /* TODO - remove this comment when client->realname is not a constant string anymore */
+	free(client->realname);
 	free(client->hostname);
 	free(client->nick);
-	/*free(client->username);*/
-	/*ree(client->server);*/ /* TODO think about whether this is really necessary */
+	free(client->username);
+	free(client->server);
 	close(client->socket_fd);
-	
 	ev_io_stop(client->ev_loop, &client->ev_watcher); /* Stop the callback mechanism */
 	ev_break(client->ev_loop, EVBREAK_ONE); /* Stop iterating */
 }

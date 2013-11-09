@@ -1,6 +1,6 @@
-#include "protocol/limits.h"
-#include "include/parsemsg.h"
 #include <ctype.h>
+#include "protocol.h"
+#include "parsemsg.h"
 
 /** @file
 	@brief IRC Messages parser implementation
@@ -97,7 +97,7 @@ static int read_params(char *buf, char *params[MAX_IRC_PARAMS]) {
 				<li>`-1` if an error occurred, meaning there was a syntax error. Syntax errors that can be detected include: 
 					 <ol>
 						<li>The case that a message only contains a prefix field, in which case the value of `*prefix` is undefined;</li>
-						<li>The case that a message does not conform to the RFC specification that it must end with \\r\\n.</li>
+						<li>The case that a message does not conform to the RFC specification that it must end with \\r\\n;</li>
 						<li>The case that there are more parameters in a command than the maximum allowed by the RFC, in which case the contents of `params[i]` is undefined, but no buffer overflow conditions occur.</li>
 					</ol>
 				</li>

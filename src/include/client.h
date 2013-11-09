@@ -22,6 +22,7 @@ struct irc_client {
 	char *nick; /**<nickname */
 	char *username; /**<ident field */
 	char *server; /**<this client's server ip address. `NULL` if it's a local client */
+	unsigned is_registered : 1; /**<bit field indicating if this client has registered his connection */
 	int socket_fd; /**<the socket descriptor used to communicate with this client */
 };
 

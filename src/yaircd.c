@@ -10,7 +10,7 @@
 #include <strings.h>
 #include <ev.h>
 #include <string.h>
-#include "client/client.h"
+#include "client.h"
 
 /** @file
 	@brief Main IRCd code
@@ -25,6 +25,7 @@
 	@todo See how to daemonize properly. Read http://www-theorie.physik.unizh.ch/~dpotter/howto/daemonize
 	@todo Think about adding configuration file support (.conf)
 	@todo Allow to bind for multiple IPs
+	@todo Add SIGKILL handler to free resources before dying
 */
 
 /** How many clients are allowed to be waiting while the main process is creating a thread for a freshly arrived user. This can be safely incremented to 5 */
@@ -112,13 +113,13 @@ int ircd_boot(void) {
 	@return `0` in case of success; `1` if an error ocurred
 */
 int main(void) {
-	if (daemon(1,0) == -1) {
+	/*if (daemon(1,0) == -1) {
 		perror("::yaircd.c:main(): Could not daemonize");
 		return 1;
 	}
-	else {
+	else {*/
 		return ircd_boot();
-	}
+	/*}*/
 }
 
 
