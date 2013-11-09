@@ -1,5 +1,5 @@
-#ifndef __P_LIMITS_GUARD__
-#define __P_LIMITS_GUARD__
+#ifndef __PROTOCOL_SPECS_GUARD__
+#define __PROTOCOL_SPECS_GUARD__
 
 /** @file
 	@brief IRC Protocol defined limits
@@ -21,7 +21,6 @@
 /* End protocol limits */
 
 /* Error replies */
-
 /** Every reply is a positive integer. We define a generic type to use in the rest of the code here */
 typedef unsigned int numreply_t;
 
@@ -382,4 +381,4 @@ typedef unsigned int numreply_t;
 #define RPL_ADMINEMAIL 259U
 /* End command responses */
 
-#endif /* __P_LIMITS_GUARD__ */
+#endif /* __PROTOCOL_SPECS_GUARD__ */

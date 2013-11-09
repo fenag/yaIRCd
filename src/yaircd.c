@@ -10,7 +10,7 @@
 #include <strings.h>
 #include <ev.h>
 #include <string.h>
-#include "client/client.h"
+#include "client.h"
 
 /** @file
 	@brief Main IRCd code

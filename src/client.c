@@ -3,9 +3,9 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <ev.h>
-#include "client/client.h"
-#include "client/client_list.h"
-#include "protocol/limits.h"
+#include "client.h"
+#include "client_list.h"
+#include "protocol.h"
 #include "wrappers.h"
 #include "parsemsg.h"
 

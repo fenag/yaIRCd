@@ -1,8 +1,8 @@
-#include "client/client_list.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include "client_list.h"
 
 /** @file
 	@brief Client list operations implementation

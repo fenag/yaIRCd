@@ -1,6 +1,6 @@
-#include "protocol/limits.h"
-#include "include/parsemsg.h"
 #include <ctype.h>
+#include "protocol.h"
+#include "parsemsg.h"
 
 /** @file
 	@brief IRC Messages parser implementation
