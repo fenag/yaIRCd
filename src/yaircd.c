@@ -25,6 +25,7 @@
 	@todo See how to daemonize properly. Read http://www-theorie.physik.unizh.ch/~dpotter/howto/daemonize
 	@todo Think about adding configuration file support (.conf)
 	@todo Allow to bind for multiple IPs
+	@todo Add SIGKILL handler to free resources before dying
 */
 
 /** How many clients are allowed to be waiting while the main process is creating a thread for a freshly arrived user. This can be safely incremented to 5 */
