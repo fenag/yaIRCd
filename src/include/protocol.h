@@ -44,7 +44,7 @@ typedef unsigned int numreply_t;
 /** Returned by WHOWAS to indicate there is no history information for that nickname. */
 #define ERR_WASNOSUCHNICK 406U
 
-/** Returned to a client which is attempting to send PRIVMSG/NOTICE using the user@host destination format and for a user@host which has several occurrences. */
+/** Returned to a client which is attempting to send PRIVMSG/NOTICE using the user\@host destination format and for a user\@host which has several occurrences. */
 #define ERR_TOOMANYTARGETS 407U
 
 /** PING or PONG message missing the originator parameter which is required since these commands must work without valid prefixes. */
@@ -223,13 +223,13 @@ typedef unsigned int numreply_t;
 /** Returned by a server answering a SUMMON message to indicate that it is summoning that user. */
 #define RPL_SUMMONING 342U
 
-/** Reply by the server showing its version details. The <version> is the version of the software being used (including any patchlevel revisions) and the <debuglevel> is used to indicate if the server is running in "debug mode". The "comments" field may contain any comments about the version or further version details. */
+/** Reply by the server showing its version details. The \<version\> is the version of the software being used (including any patchlevel revisions) and the \<debuglevel\> is used to indicate if the server is running in "debug mode". The "comments" field may contain any comments about the version or further version details. */
 #define RPL_VERSION 351U
 
 /** WHO reply */
 #define RPL_WHOREPLY 352U
 
-/** The RPL_WHOREPLY and RPL_ENDOFWHO pair are used to answer a WHO message. The RPL_WHOREPLY is only sent if there is an appropriate match to the WHO query. If there is a list of parameters supplied with a WHO message, a RPL_ENDOFWHO must be sent after processing each list item with <name> being the item. More info on RFC. */
+/** The RPL_WHOREPLY and RPL_ENDOFWHO pair are used to answer a WHO message. The RPL_WHOREPLY is only sent if there is an appropriate match to the WHO query. If there is a list of parameters supplied with a WHO message, a RPL_ENDOFWHO must be sent after processing each list item with \<name\> being the item. More info on RFC. */
 #define RPL_ENDOFWHO 315U
 
 /** Reply to a NAMES message; see RPL_ENDOFNAMES */

@@ -113,13 +113,13 @@ int ircd_boot(void) {
 	@return `0` in case of success; `1` if an error ocurred
 */
 int main(void) {
-	if (daemon(1,0) == -1) {
+	/*if (daemon(1,0) == -1) {
 		perror("::yaircd.c:main(): Could not daemonize");
 		return 1;
 	}
-	else {
+	else {*/
 		return ircd_boot();
-	}
+	/*}*/
 }
 
 
