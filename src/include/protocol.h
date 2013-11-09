@@ -9,7 +9,6 @@
 	
 	@author Filipe Goncalves
 	@date November 2013
-	@todo Change this file name to avoid confusion with the standard file <limits.h>
 */
 
 /* Protocol limits */
