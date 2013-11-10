@@ -2,9 +2,15 @@
 #define __PROTOCOL_SPECS_GUARD__
 
 /** @file
-	@brief IRC Protocol defined limits
+	@brief IRC Protocol definitions and limits
 	
-	Limits that arise from the IRC protocol specification are defined in this header file.
+	This file is a set of macros that are related to the protocol requirements.
+	Definitions in this file include:
+	<ul>
+		<li>Every limit that arises from the IRC protocol specification (max. message size, max. nickname length, etc.)</li>
+		<li>Error replies and command replies are defined as unsigned constants.</li>
+	</ul>
+	
 	See RFC 1459 for further information.
 	
 	@author Filipe Goncalves
@@ -17,6 +23,9 @@
 
 /** Max. number of parameters in an IRC message, as specified in Section 2.3 */
 #define MAX_IRC_PARAMS 15
+
+/** Max. nick length, as specified in RFC Section 1.2 */
+#define MAX_NICK_LENGTH 9
 /* End protocol limits */
 
 /* Error replies */

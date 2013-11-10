@@ -1,132 +1,213 @@
-#include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
+#include <stdio.h>
 #include <string.h>
 #include "trie.h"
 
 /** @file
-	@brief Trie implementation tuned for IRC nicknames
+	@brief Flexible trie implementation with some neat options.
 
-	This file implements every trie operations available to the nicknames list manager. 
-	Please refer to http://en.wikipedia.org/wiki/Trie if you are not sure how a trie works.
+	This file implements every trie operations available to the various list managers (nicknames list, commands list, channels list, and any other list of strings)
+	It allows client code (by client we mean "the code that uses this") to define which characters are allowed inside a word.
+	Client code is required to provide functions that convert a letter into a position (ID) and a position back into a letter. IDs must be unique, consecutive, and start at 0; there can be no gaps
+	in the sequence, because IDs are used to index an array. So, for example, to allow an alphabet which consists of the characters `[a-z]` and `[0-9]`, client code must find a mapping which converts 
+	any of these characters into an integer `i` such that `i >= 0 && i <= 35` (26 letters for the alphabet and 10 digits).
+	One possible mapping would be to map any letter `c` in `[a-z]` to `c - &lsquo;a&rsquo;` and any number `i` in `[0-9]` to `&lsquo;z&rsquo; + i - &lsquo;0&rsquo;`.
+	
+	Please refer to http://en.wikipedia.org/wiki/Trie if you are not sure how a trie works. It always guarantees `O(n)` insertion, deletion and search time, where `n` is the size of the word. When compared to hash tables,
+	it is a good alternative, since hash tables provide `O(1)` access, but normally take about `O(n)` time to compute the hash function, and there can be collisions.
 	
 	@author Filipe Goncalves
 	@date November 2013
-	@see { client_list.c }
-	@warning This implementation is reentrant, but it is not thread safe. The same function with the same trie instance cannot be called concurrently. Upper caller needs to make the necessary use of mutexes or other
-	synchronization primitives.
+	@see client_list.c
+	@warning This implementation is reentrant, but it is not thread safe. The same trie instance cannot be fed into this implementation from different threads concurrently. 
+	Upper caller needs to make the necessary use of mutexes or other synchronization primitives.
 */
 
-#define valid_char(s) (((s) >= 'a' && (s) <= 'z') || ((s) >= 'A' && (s) <= 'Z') || (s) == '-' || (s) == '[' || (s) == ']' || (s) == '\\' || (s) == '`' || (s) == '^' || (s) == '{' || s == '}' || s =='|')
-#define special_char_id(s) ((s) == '-' ? 0 : s == '[' || s == '{' ? 1 : s == ']' || s == '}' ? 2 : s == '\\' || s == '|' ? 3 : s == '`' ? 4 : s == '^' ? 5 : -1)
-#define special_id_to_char(i) ((i) == 0 ? '-' : (i) == 1 ? '{' : (i) == 2 ? '}' : (i) == 3 ? '|' : (i) == 4 ? '`' : (i) == 5 ? '^' : -1)
-#define get_char_pos(s) ((((s) >= 'a' && (s) <= 'z') || ((s) >= 'A' && (s) <= 'Z')) ? tolower((unsigned char) (s)) - 'a' : ALPHABET_SIZE + special_char_id(s))
-#define pos_to_char(i)  ((char) (((i) < ALPHABET_SIZE) ? ('a'+(i)) : special_id_to_char((i) - ALPHABET_SIZE)))
-
+/** Initializes a new trie node with no children and no edges.
+	@param edges Number of edges (alphabet size)
+	@return The new node
+*/
+static struct trie_node *init_node(int edges) {
+	int i;
+	struct trie_node *new_node;
+	
+	new_node = malloc(sizeof(struct trie_node));
+	new_node->is_word = 0;
+	new_node->children = 0;
+	new_node->data = NULL;
+	new_node->edges = malloc(sizeof(*new_node->edges)*edges);
+	
+	for (i = 0; i < edges; i++)
+		new_node->edges[i] = NULL;
+	
+	return new_node;
+}
 
 /** Creates a new trie.
-	@return `NULL` if there wasn't enough memory; a new trie instance with no words otherwise.
+	@param free_function Pointer to function that is called inside `destroy_trie()` to free a node's `data`
+	@param is_valid Pointer to function that returns `1` if a char is part of this trie's alphabet; `0` otherwise
+	@param pos_to_char Pointer to function that converts an index position from `edges` back to its character representation.
+	@param char_to_pos Pointer to function that converts a character `s` into a valid, unique position that is used to index `edges`.
+	@param edges How many edges each node is allowed to have, that is, the size of this trie's alphabet.
+	@return A new trie instance with no words.
 */
-struct trie_node *init_trie(void) {
-	int i;
-	struct trie_node *root;
-	root = malloc(sizeof(struct trie_node));
-	if (root == NULL) {
-		return NULL;
-	}
-	root->is_word = 0;
-	root->children = 0;
-	for (i = 0; i < EDGES_NO; i++)
-		root->edges[i] = NULL;	
-	return root;
+struct trie_t *init_trie(void (*free_function)(void *), int (*is_valid)(char), char (*pos_to_char)(int), int (*char_to_pos)(char), int edges) {
+	struct trie_t *trie;
+	trie = malloc(sizeof(struct trie_t));
+	trie->root = init_node(edges);
+	trie->free_f = free_function;
+	trie->is_valid = is_valid;
+	trie->pos_to_char = pos_to_char;
+	trie->char_to_pos = char_to_pos;
+	trie->edges_no = edges;
+	return trie;
 }
 
 /** Frees a node's child. After returning, ensures that `node->edges[pos] == NULL` and that every resource previously allocated was freed.
 	@param node Node that contains the child to free
 	@param pos Which child to free
 	@warning Assumes that `node->edges[pos]` is not `NULL`.
+	@warning This function is not recursive. If the node in `node->edges[pos]` references other nodes, these references will be lost and there is a memory leak.
 */
 static inline void free_child(struct trie_node *node, unsigned char pos) {
+	free(node->edges[pos]->edges);
 	free(node->edges[pos]);
 	node->edges[pos] = NULL;
 	node->children--;
 }
 
-/** Frees every allocated storage for a trie.
+/** Recursively frees every node reachable from `node`.
+	@param node The top node (in the beginning, most likely the root node).
 	@param trie A trie, as returned by `init_trie()`.
+	@param free_data `1` if the free function stored in `trie` shall be used to free each node's data, `0` otherwise
 */
-void destroy_trie(struct trie_node *trie) {
+static void destroy_aux(struct trie_node *node, struct trie_t *trie, int free_data) {
 	int i;
-	for (i = 0; i < EDGES_NO; i++) {
-		if (trie->edges[i] != NULL) {
-			destroy_trie(trie->edges[i]);
+	for (i = 0; i < trie->edges_no; i++) {
+		if (node->edges[i] != NULL) {
+			destroy_aux(node->edges[i], trie, free_data);
 		}
 	}
+	if (free_data) {
+		(*trie->free_f)(node->data);
+	}
+	free(node->edges);
+	free(node);
+}
+
+/** Frees every allocated storage for a trie.
+	@param trie A trie, as returned by `init_trie()`.
+	@param free_data `1` if the `data` field of each node is to be free'd by the free function previously specified; `0` otherwise
+*/
+void destroy_trie(struct trie_t *trie, int free_data) {
+	destroy_aux(trie->root, trie, free_data);
 	free(trie);
 }
 
-/** Adds a new word to a trie.
-	@param root The trie's root node, as returned by `init_trie()`
+/** Recursive implementation that is called by `add_word_trie()`.
+	@param root Current node.
+	@param trie A trie, as returned by `init_trie()`.
 	@param word The word to add. Must be a null-terminated characters sequence.
+	@param data The data to associate to this word.
 	@return `0` on success; `-1` if `word` contains invalid characters, in which case the trie remains unchanged.
+	@note If the word already exists, its `data` will now point to the new data. Care must be taken not to lose reference to the old data.
 */
-int add_word_trie(struct trie_node *root, char *word) {
+static int add_word_trie_aux(struct trie_node *root, char *word, struct trie_t *trie, void *data) {
 	unsigned char pos;
 	if (*word == '\0') {
 		root->is_word = 1;
+		root->data = data;
 		return 0;
 	} else {
-		if (!valid_char(*word)) {
+		if (!(*trie->is_valid)(*word)) {
 			return -1;
 		}
-		if (root->edges[pos = get_char_pos(*word)] == NULL) {
+		if (root->edges[pos = (*trie->char_to_pos)(*word)] == NULL) {
 			root->children++;
-			root->edges[pos] = init_trie();
-			if (add_word_trie(root->edges[pos], word+1) == -1) {
+			root->edges[pos] = init_node(trie->edges_no);
+			if (add_word_trie_aux(root->edges[pos], word+1, trie, data) == -1) {
 				free_child(root, pos);
 				return -1;
 			}
 			return 0;
 		}
-		return add_word_trie(root->edges[pos], word+1);
+		return add_word_trie_aux(root->edges[pos], word+1, trie, data);
 	}
 }
 
-/** Deletes a word from a trie. If no such word exists, or the word contains invalid characters, nothing happens.
-	@param root The trie's root node, as returned by `init_trie()`
-	@param word The word to delete. Must be a null-terminated characters sequence.
+/** Adds a new word to a trie.
+	@param trie A trie, as returned by `init_trie()`.
+	@param word The word to add. Must be a null-terminated characters sequence.
+	@param data The data to associate to this word.
+	@return `0` on success; `-1` if `word` contains invalid characters, in which case the trie remains unchanged.
+	@note If the word already exists, its `data` will now point to the new data. Care must be taken not to lose reference to the old data.
 */
-void delete_word_trie(struct trie_node *root, char *word) {
+int add_word_trie(struct trie_t *trie, char *word, void *data) {
+	return add_word_trie_aux(trie->root, word, trie, data);
+}
+
+/** Recursive implementation called by `delete_word_trie()`.
+	@param root Current node.
+	@param trie A trie, as returned by `init_trie()`.
+	@param word The word to delete. Must be a null-terminated characters sequence.
+	@return If the word existed, its associated data is returned. Otherwise, `NULL` is returned.
+*/
+static void *delete_word_trie_aux(struct trie_node *root, char *word, struct trie_t *trie) {
 	unsigned char pos;
+	void *ret;
 	if (*word == '\0') {
-		root->is_word = 0;
+		if (root->is_word) {
+			root->is_word = 0;
+			return root->data;
+		}
+		return NULL;
 	} else {
-		if (!valid_char(*word) || root->edges[pos = get_char_pos(*word)] == NULL) {
-			return;
+		if (!(*trie->is_valid)(*word) || root->edges[pos = (*trie->char_to_pos)(*word)] == NULL) {
+			return NULL;
 		} else {
-			delete_word_trie(root->edges[pos], word+1);
+			ret = delete_word_trie_aux(root->edges[pos], word+1, trie);
 			if (root->edges[pos]->children == 0 && !root->edges[pos]->is_word) {
 				free_child(root, pos);
 			}
+			return ret;
 		}
 	}
 }
 
-/** Searches for a word in a trie.
-	@param root The trie's root node, as returned by `init_trie()`
-	@param word The word to search for. Must be a null-terminated characters sequence.
-	@return 1 if there's a match; 0 if there's no match, or `word` contains invalid characters.
+/** Deletes a word from a trie.
+	@param trie A trie, as returned by `init_trie()`.
+	@param word The word to delete. Must be a null-terminated characters sequence.
+	@return If the word existed, its associated data is returned. Otherwise, `NULL` is returned.
 */
-int find_word_trie(struct trie_node *root, char *word) {
+void *delete_word_trie(struct trie_t *trie, char *word) {
+	return delete_word_trie_aux(trie->root, word, trie);
+}
+
+/** Recursive search implementation used by `find_word_trie()`.
+	@param root Current node.
+	@param trie A trie, as returned by `init_trie()`.
+	@param word The word to search for. Must be a null-terminated characters sequence.
+	@return The data associated with `word` if there's a match; `NULL` if there's no match, or `word` contains invalid characters.
+*/
+static void *find_word_trie_aux(struct trie_node *root, char *word, struct trie_t *trie) {
 	struct trie_node *ptr;
 	if (*word == '\0') {
-		return root->is_word;
+		return root->is_word ? root->data : NULL;
 	}
-	if (!valid_char(*word)) {
-		return 0;
+	if (!(*trie->is_valid)(*word)) {
+		return NULL;
 	}
-	ptr = root->edges[get_char_pos(*word)];
-	return ptr && find_word_trie(ptr, word+1);
+	ptr = root->edges[(*trie->char_to_pos)(*word)];
+	return ptr ? find_word_trie_aux(ptr, word+1, trie) : NULL;
+}
+
+/** Searches for a word in a trie.
+	@param trie A trie, as returned by `init_trie()`.
+	@param word The word to search for. Must be a null-terminated characters sequence.
+	@return The data associated with `word` if there's a match; `NULL` if there's no match, or `word` contains invalid characters.
+*/
+void *find_word_trie(struct trie_t *trie, char *word) {
+	return find_word_trie_aux(trie->root, word, trie);
 }
 
 /** Pops an element off the stack that represents an on going search by prefix.
@@ -167,20 +248,21 @@ static inline void trie_push(struct trie_node_stack *st, struct trie_node *el, i
 	@param result Buffer that stores the additional path taken by this branch after processing the prefix. For example, if `prefix` is "hel", and this branch finds a match "hello", then `result` will hold "lo".
 		   It is imperative that `result` points to a memory location large enough to hold at least `st->depth` characters, of which `st->depth-1` characters will belong to the branch path.
 		   When this function returns a value that is not `NULL`, it is guaranteed that `result` is null-terminated and contains a valid match for an on going prefix search.
+	@param trie A trie, as returned by `init_trie()`
 	@return State information for the next call; `NULL` if no more matches were found. If `NULL` is returned, `result` may have been written, but its contents are meaningless.
 	@warning If this function returns `NULL`, the contents of `result` are undefined.
 	@warning This function does not free state information when it returns `NULL`. Thus, the caller is required to save `st` in an auxiliary variable. If the same variable is used, then the reference to the last
 			 valid state is lost and it is not possible to free it anymore.
 */
-static struct trie_node_stack *find_by_prefix_next_trie_n(struct trie_node_stack *st, char *result) {
+static struct trie_node_stack *find_by_prefix_next_trie_n(struct trie_node_stack *st, char *result, struct trie_t *trie) {
 	struct trie_node_stack_elm *curr;
 	int i;
 	while (!trie_stack_empty(st)) {
 		curr = trie_pop(st);
 		if (curr->depth+1 < st->depth) {
-			for (i = EDGES_NO-1; i >= 0; i--) {
+			for (i = trie->edges_no-1; i >= 0; i--) {
 				if (curr->el->edges[i] != NULL) {
-					trie_push(st, curr->el->edges[i], curr->depth+1, pos_to_char(i));
+					trie_push(st, curr->el->edges[i], curr->depth+1, (*trie->pos_to_char)(i));
 				}
 			}
 		}
@@ -197,10 +279,9 @@ static struct trie_node_stack *find_by_prefix_next_trie_n(struct trie_node_stack
 }
 
 void free_trie_stack(struct trie_node_stack *st);
-
 /** Finds words in a trie by prefix. Special efforts have been made to maintain this function reentrant; no internal state is preserved (we delegate this to the upper caller).
 	To find every match for a given prefix, this function must be repeatedly called until no more matches are reported. Each call to this function will pop a new match for the prefix.
-	@param trie The trie's root node, as returned by `init_trie()`
+	@param trie A trie, as returned by `init_trie()`
 	@param st The value that was returned by the previous call to this function. This is necessary to allow the function to continue from where it previously stopped.
 			  If this is the first call, this parameter must be `NULL`. Note that this parameter must be `NULL` everytime a new prefix search takes place.
 	@param prefix A null terminated characters sequence describing the prefix. For example, "hel" is a prefix that will match words like "hell", "hello", and others. It will also match "hel", if "hel" is a word.
@@ -225,15 +306,15 @@ void free_trie_stack(struct trie_node_stack *st);
 	@note If the caller no longer wishes to keep on searching, state information previously returned can be freed by calling `free_trie_stack()`. Again, only the last returned value can be freed.
 		  It is not required to call `free_trie_stack()` after no more matches exist, and in fact it is not allowed to. After no more matches exist, this function automatically frees state information. 
 */
-struct trie_node_stack *find_by_prefix_next_trie(struct trie_node *trie, struct trie_node_stack *st, const char *prefix, int depth, char *result) {
+struct trie_node_stack *find_by_prefix_next_trie(struct trie_t *trie, struct trie_node_stack *st, const char *prefix, int depth, char *result) {
 	struct trie_node *n;
 	struct trie_node_stack *new_st;
 	const char *ptr;
 	int i;
 	int size;
 	if (st == NULL) {
-		for (size = 0, n = trie, ptr = prefix; *ptr != '\0'; ptr++, size++) {
-			if (!valid_char(*ptr) || (n = n->edges[get_char_pos(*ptr)]) == NULL) {
+		for (size = 0, n = trie->root, ptr = prefix; *ptr != '\0'; ptr++, size++) {
+			if (!(*trie->is_valid)(*ptr) || (n = n->edges[(*trie->char_to_pos)(*ptr)]) == NULL) {
 				return NULL;
 			}
 		}
@@ -245,9 +326,9 @@ struct trie_node_stack *find_by_prefix_next_trie(struct trie_node *trie, struct 
 		st->depth = depth-size;
 		if (st->depth > 1) {
 			/* We can still write at least 1 char in result */
-			for (i = EDGES_NO-1; i >= 0; i--) {
+			for (i = trie->edges_no-1; i >= 0; i--) {
 				if (n->edges[i] != NULL) {
-					trie_push(st, n->edges[i], 1, pos_to_char(i));
+					trie_push(st, n->edges[i], 1, (*trie->pos_to_char)(i));
 				}
 			}
 		}
@@ -257,7 +338,7 @@ struct trie_node_stack *find_by_prefix_next_trie(struct trie_node *trie, struct 
 		}
 	}
 	result += sprintf(result, "%s", st->prefix);
-	if ((new_st = find_by_prefix_next_trie_n(st, result)) == NULL) {
+	if ((new_st = find_by_prefix_next_trie_n(st, result, trie)) == NULL) {
 		free_trie_stack(st);
 	}
 	return new_st;
@@ -290,37 +371,58 @@ void free_trie_stack(struct trie_node_stack *st) {
 
 /* Debug */
 /*
-static void print_trie_aux(struct trie_node *root, int depth);
-static void print_trie(struct trie_node *root) {
-	print_trie_aux(root, 0);
+static void print_trie_aux(struct trie_node *root, int depth, struct trie_t *trie);
+static void print_trie(struct trie_t *trie) {
+	print_trie_aux(trie->root, 0, trie);
 }
 static void inline print_spaces(int d);
-static void print_trie_aux(struct trie_node *root, int depth) {
+static void print_trie_aux(struct trie_node *root, int depth, struct trie_t *trie) {
 	int i;
-	for (i = 0; i < EDGES_NO; i++)
+	for (i = 0; i < trie->edges_no; i++)
 		if (root->edges[i] != NULL) {
 			print_spaces(depth);
-			printf("%c %s:\n", pos_to_char(i), (root->edges[i]->is_word ? "[WORD]" : ""));
-			print_trie_aux(root->edges[i], depth+1);
+			printf("%c %s:\n", (*trie->pos_to_char)(i), (root->edges[i]->is_word ? "[WORD]" : ""));
+			print_trie_aux(root->edges[i], depth+1, trie);
 		}
 }
-
 static void inline print_spaces(int d) {
 	while (d--) {
 		putchar(' ');
 		putchar(' ');
 	}
 }
-#define MAX_WORD_LENGTH 10
-#define MAX_WORD_LENGTH_STR "%10s"
+#define ALPHABET_SIZE 26
+#define SPECIAL_CHARS_SIZE 9
+#define EDGES_NO ALPHABET_SIZE+SPECIAL_CHARS_SIZE
+#define valid_char(s) (((s) >= 'a' && (s) <= 'z') || ((s) >= 'A' && (s) <= 'Z') || (s) == '-' || (s) == '[' || (s) == ']' || (s) == '\\' || (s) == '`' || (s) == '^' || (s) == '{' || s == '}' || s =='|')
+#define special_char_id(s) ((s) == '-' ? 0 : s == '[' || s == '{' ? 1 : s == ']' || s == '}' ? 2 : s == '\\' || s == '|' ? 3 : s == '`' ? 4 : s == '^' ? 5 : -1)
+#define special_id_to_char(i) ((i) == 0 ? '-' : (i) == 1 ? '{' : (i) == 2 ? '}' : (i) == 3 ? '|' : (i) == 4 ? '`' : (i) == 5 ? '^' : -1)
+#define get_char_pos_m(s) ((((s) >= 'a' && (s) <= 'z') || ((s) >= 'A' && (s) <= 'Z')) ? tolower((unsigned char) (s)) - 'a' : ALPHABET_SIZE + special_char_id(s))
+#define pos_to_char_m(i)  ((char) (((i) < ALPHABET_SIZE) ? ('a'+(i)) : special_id_to_char((i) - ALPHABET_SIZE)))
+void free_f(void *args) {
+	return;
+}
+int is_valid(char s) {
+	return valid_char(s);
+}
+char pos_to_char(int i) {
+	return pos_to_char_m(i);
+}
+int char_to_pos(char s) {
+	return get_char_pos_m(s);
+}
+#define MAX_WORD_LENGTH 128
+#define MAX_WORD_LENGTH_STR "%128s"
 int main(void) {
 	int option = -1, i;
 	char word_buf[MAX_WORD_LENGTH+1];
 	char prefix[MAX_WORD_LENGTH+1];
 	char option_str[2], *endptr;
-	struct trie_node *trie;
+	struct trie_t *trie;
 	struct trie_node_stack *st;
-	trie = init_trie();
+	int *my_data = &option;
+	int *returned;
+	trie = init_trie(free_f, is_valid, pos_to_char, char_to_pos, EDGES_NO);
 	while (option != 0) {
 		printf("Choose an option:\n");
 		printf("1 - Add a word\n");
@@ -341,13 +443,13 @@ int main(void) {
 			case 1:
 				printf("Type a word (max. %d characters): ", MAX_WORD_LENGTH);
 				scanf(MAX_WORD_LENGTH_STR, word_buf);
-				add_word_trie(trie, word_buf);
+				add_word_trie(trie, word_buf, (void *) my_data);
 				break;
 			case 2:
 				printf("Type a word (max. %d characters): ", MAX_WORD_LENGTH);
 				scanf(MAX_WORD_LENGTH_STR, word_buf);
-				if (find_word_trie(trie, word_buf))
-					printf("Word exists.");
+				if ((returned = (int *) find_word_trie(trie, word_buf)) != NULL)
+					printf("Word exists. Data: %d\n", *returned);
 				else
 					printf("Word does not exist.");
 				break;
@@ -393,7 +495,7 @@ int main(void) {
 		}
 		printf("\n");
 	}
-	destroy_trie(trie);
+	destroy_trie(trie, 0);
 	return 0;
 }
 */

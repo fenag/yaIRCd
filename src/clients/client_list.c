@@ -7,7 +7,7 @@
 /** @file
 	@brief Client list operations implementation
 	
-	This file implements the available operations on the clients list.
+	This file implements the available operations on the clients list. It is a wrapper for trie operations, and it is thread safe.
 	
 	@author Filipe Goncalves
 	@date November 2013
