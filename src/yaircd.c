@@ -11,6 +11,7 @@
 #include <ev.h>
 #include <string.h>
 #include "client.h"
+#include "client_list.h"
 
 /** @file
 	@brief Main IRCd code
@@ -29,7 +30,7 @@
 */
 
 /** How many clients are allowed to be waiting while the main process is creating a thread for a freshly arrived user. This can be safely incremented to 5 */
-#define SOCK_MAX_HANGUP_CLIENTS 3
+#define SOCK_MAX_HANGUP_CLIENTS 5
 
 static int mainsock_fd; /**<Main socket file descriptor, where new connection request arrive */
 static struct sockaddr_in serv_addr; /**<This node's address, namely, the IP and port where we will be listening for new connections. */
@@ -99,12 +100,16 @@ int ircd_boot(void) {
 	ev_io_init(&socket_watcher, connection_cb, mainsock_fd, EV_READ);
 	ev_io_start(loop, &socket_watcher);
 	
+	/* Initialize data structures */
+	client_list_init();
+	
 	/* Now we just have to sit and wait */
 	ev_loop(loop, 0);
 	
 	pthread_attr_destroy(&thread_attr);
 	ev_loop_destroy(loop);
 	close(mainsock_fd);
+	client_list_destroy(); /* This is not supposed to be here */
 	
 	return 0;
 }

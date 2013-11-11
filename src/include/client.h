@@ -34,17 +34,7 @@ struct irc_client_args_wrapper {
 	char *ip_addr; /**<the new client's ip address */
 };
 
-/** Accepts a new client's connection. This function is indirectly called by the threads scheduler. When a new client pops in, the main process allocates a new thread whose init function is this one.
-	This function is used as a wrapper to an internal function. Its purpose is to extract the arguments information that was packed in `irc_client_args_wrapper` and pass them to an internal function
-	that does the rest of the job.
-	@param args A pointer to `struct irc_client_args_wrapper`, casted to `void *`. It is assumed that it points to an address in heap. This is always casted to `struct irc_client_args_wrapper *`.
-	This parameter is `free()`'d when it is not needed anymore; the caller does not need to worry about freeing the memory.
-	We chose heap allocation here because otherwise there would be a possible race condition: after the main process calls `pthread_create()`, it is undefined which instruction is executed next
-	(the next instructions inside the main process, or the thread's init routine). In the unfortunate case that the main process kept executing and a new client immediately arrived, there was a chance that
-	`irc_client_args_wrapper` in the main's process stack would be updated with the new client's values before the thread execution for this client started. Therefore, the main process explicitly allocs memory
-	to pass arguments for each new client that arrives.
-	@return This function always returns `NULL`
-*/				
+/* Documented in client.c */		
 void *new_client(void *args);
 
 #endif /* __IRC_CLIENT_GUARD__ */

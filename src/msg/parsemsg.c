@@ -106,6 +106,8 @@ static int read_params(char *buf, char *params[MAX_IRC_PARAMS]) {
 	@warning `buf` is destructively changed. `*prefix`, `*cmd`, and `params[i]` all point to different positions in `buf`. No memory is allocated inside this function, only pointer manipulation takes place.
 	@warning When `*params_filled > 0`, note that, according to the RFC, it is possible that `params[*params_filled-1]` points to a parameter with spaces. This is the case everytime a trailing parameter was prefixed with `:`
 	@warning `params` is assumed to contain enough space for the maximum number of parameters allowed for an IRC message (as of this writing, 15). It can be bigger than that, but this function will ignore any additional space.
+	@warning When `-1` is returned, it is not guaranteed that `cmd` and `prefix` point to a null terminated characters sequence, and the value in `*params_filled` is undefined. Thus, the caller shall always check the return value
+			 of this function before using any of the information it provides.
 */
 int parse_msg(char *buf, int size, char **prefix, char **cmd, char *params[MAX_IRC_PARAMS], int *params_filled) {
 	char *current;

@@ -8,6 +8,8 @@
 #include "protocol.h"
 #include "wrappers.h"
 #include "parsemsg.h"
+#include "sendreply.h"
+#include "interpretmsg.h"
 
 /** @file
 	@brief Implementation of functions that deal with irc clients
@@ -20,6 +22,7 @@
 	@todo Implement timeouts
 	@todo Move client message exchanching routines to another file
 	@todo Implement IRC commands :)
+	@todo Each client must have a mutex to control access to his socket.
 */
 
 static void manage_client_messages(EV_P_ ev_io *watcher, int revents);
@@ -27,7 +30,17 @@ static int new_client_connection(char *ip_addr, int socket);
 static void destroy_client(struct irc_client *client);
 static void free_client(struct irc_client *client);
 
-/* Documented in header file client.h */
+/** Accepts a new client's connection. This function is indirectly called by the threads scheduler. When a new client pops in, the main process allocates a new thread whose init function is this one.
+	This function is used as a wrapper to an internal function. Its purpose is to extract the arguments information that was packed in `irc_client_args_wrapper` and pass them to an internal function
+	that does the rest of the job.
+	@param args A pointer to `struct irc_client_args_wrapper`, casted to `void *`. It is assumed that it points to an address in heap. This is always casted to `struct irc_client_args_wrapper *`.
+	This parameter is `free()`'d when it is not needed anymore; the caller does not need to worry about freeing the memory.
+	We chose heap allocation here because otherwise there would be a possible race condition: after the main process calls `pthread_create()`, it is undefined which instruction is executed next
+	(the next instructions inside the main process, or the thread's init routine). In the unfortunate case that the main process kept executing and a new client immediately arrived, there was a chance that
+	`irc_client_args_wrapper` in the main's process stack would be updated with the new client's values before the thread execution for this client started. Therefore, the main process explicitly allocs memory
+	to pass arguments for each new client that arrives.
+	@return This function always returns `NULL`
+*/
 void *new_client(void *args) {
 	struct irc_client_args_wrapper *arguments = (struct irc_client_args_wrapper *) args;
 	int sockfd;
@@ -45,13 +58,6 @@ void *new_client(void *args) {
 	return NULL;
 }
 
-/** Temp. This has to be rewritten */
-static void print_err_reply(struct irc_client *client, numreply_t reply) {
-	char str[4];
-	sprintf(str, NUMREPLY_T_FORMAT, reply);
-	write(client->socket_fd, str, (size_t) 3);
-}
-
 /** The core function that deals with a client. This is the callback function for a client's connection (previously set by `new_client_connection()`). It is automagically called everytime something
 	fresh and interesting to read arrives at the client's socket, or everytime connection to this client was lost for some reason (process died silently, TCP connection broken, etc.).
 	It parses and interprets the client's message according to the official RFC, and sends a reply (if there is one to send, some commands do not require a reply).
@@ -65,6 +71,7 @@ static void print_err_reply(struct irc_client *client, numreply_t reply) {
 	@param revents Flags provided by `libev` describing what happened. In case of `EV_ERROR`, or if `EV_READ` is not set, the function prints an error message and returns prematurely.
 	@todo Handle optional PASS command in connection registration. Discuss what should happen when a PASS command is issued, but the server does not require a password.
 	@todo Implement ERR_NICKNAMEINUSE, ERR_ERRONEUSNICKNAME, and ERR_NICKCOLLISION
+	@todo Notify other clients when a client disconnects abruptly
 */
 static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 	char msg_in[MAX_MSG_SIZE+1];
@@ -103,48 +110,18 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 	msg_in[msg_size] = '\0'; /* Ensures the message is null-terminated, as required by parsemsg() */
 	parse_res = parse_msg(msg_in, msg_size, &prefix, &cmd, params, &params_no);
 	
-	if (client->is_registered == 0) {
-		if (parse_res == -1) {
+	if (parse_res == -1) {
+		if (!client->is_registered) {
 			/* RFC Section 4.1: until the connection is registered, the server must respond to any non-registration commands with ERR_NOTREGISTERED */
-			print_err_reply(client, ERR_NOTREGISTERED);
-			return;
-		}
-		else if (strcasecmp(cmd, ==, "nick")) {
-			/* TODO Implement ERR_NICKNAMEINUSE, ERR_ERRONEUSNICKNAME, and ERR_NICKCOLLISION */
-			if (params_no < 1) {
-				print_err_reply(client, ERR_NONICKNAMEGIVEN);
-				return;
-			}
-			else {
-				client->nick = strdup(params[0]);
-			}
-		}
-		else if (strcasecmp(cmd, ==, "user")) {
-			if (params_no < 4) {
-				print_err_reply(client, ERR_NEEDMOREPARAMS);
-				return;
-			}
-			else {
-				client->username = strdup(params[0]);
-				client->realname = strdup(params[3]);
-			}
+			send_err_notregistered(client);
 		}
 		else {
-			print_err_reply(client, ERR_NOTREGISTERED);
-			return;
-		}
-		if (client->nick != NULL && client->username != NULL && client->realname != NULL) {
-			client->is_registered = 1;
+			send_err_unknowncommand(client, ""); /* Send empty command, since it is not safe to use cmd, because -1 was returned */
 		}
 	}
-	else {
-		if (msg_in[0] == 'q') {
-			notify_all_clients("[QUITTING]\n", client->nick, 11);
-			destroy_client(client);
-			return;
-		}
-		/* This is old crap, god knows what others will get after calling parsemg()... TODO fix this */
-		notify_all_clients(msg_in, client->nick, msg_size);
+	else if (interpret_msg(client, prefix, cmd, params, params_no, parse_res) == 1) {
+		/* Disconnect client */
+		
 	}
 }
 
@@ -152,7 +129,6 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 	`ev_loop` is a regular loop created with `ev_loop_new(0)`.
 	`ev_watcher` is initialized with `manage_client_messages()` as a callback function.
 	Note that, as a consequence, every client's thread will hold a loop of its own to manage this client's network I/O.
-	It also adds the new client to the list of known connected users.
 	After initializing the new user, it begins execution of the events loop. Thus, this function will not return until the loop is broken, which is done by `manage_client_messages()`. When that happens, the loop is
 	destroyed, and every resource that was alloced for this client is `free()`'d.
 	@param ip_addr A characters sequence describing the client's IP address. IPv4 only.
@@ -177,10 +153,7 @@ static int new_client_connection(char *ip_addr, int socket) {
 	new_client->username = NULL;
 	
 	ev_io_init(&new_client->ev_watcher, manage_client_messages, socket, EV_READ);
-	ev_io_start(new_client->ev_loop, &new_client->ev_watcher);
-
-	client_list_add(new_client);
-	
+	ev_io_start(new_client->ev_loop, &new_client->ev_watcher);	
 	/* Wait for messages coming from client */
 	ev_run(new_client->ev_loop, 0);
 	/* When we get here, the loop was broken by destroy_client(), we can now free it */
@@ -190,13 +163,15 @@ static int new_client_connection(char *ip_addr, int socket) {
 }
 
 /** Called everytime connection is lost with a client, either because it was abruptly closed, or the client manually issued a QUIT command.
-	It deletes the client from the list of connected clients, closes the socket and frees his resources with the exception of the pointer itself (`client`), and
+	It closes the socket and frees his resources with the exception of the pointer itself (`client`), and
 	the event loop. We can't free the event loop, since we're doing work inside a callback function. Instead, we stop the loop, and let control go back to `new_client_connection()` to
 	destroy the loop object.
 	@param client The client who got disconnected.
 */
 static void destroy_client(struct irc_client *client) {
-	client_list_delete(client);
+	if (client->is_registered) {
+		client_list_delete(client);
+	}
 	free_client(client);
 }
 

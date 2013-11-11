@@ -1,6 +1,26 @@
 #ifndef TRIE_GUARD
 #define TRIE_GUARD
 
+/** @file
+	@brief Flexible trie with some neat options.
+
+	This file describes every trie operations available to the various list managers (nicknames list, commands list, channels list, and any other list of strings)
+	It allows client code (by client we mean "the code that uses this") to define which characters are allowed inside a word.
+	Client code is required to provide functions that convert a letter into a position (ID) and a position back into a letter. IDs must be unique, consecutive, and start at 0; there can be no gaps
+	in the sequence, because IDs are used to index an array. So, for example, to allow an alphabet which consists of the characters `[a-z]` and `[0-9]`, client code must find a mapping which converts 
+	any of these characters into an integer `i` such that `i >= 0 && i <= 35` (26 letters for the alphabet and 10 digits).
+	One possible mapping would be to map any letter `c` in `[a-z]` to `c - &lsquo;a&rsquo;` and any number `i` in `[0-9]` to `&lsquo;z&rsquo; + i - &lsquo;0&rsquo;`.
+	
+	Please refer to http://en.wikipedia.org/wiki/Trie if you are not sure how a trie works. It always guarantees `O(n)` insertion, deletion and search time, where `n` is the size of the word. When compared to hash tables,
+	it is a good alternative, since hash tables provide `O(1)` access, but normally take about `O(n)` time to compute the hash function, and there can be collisions.
+	
+	@author Filipe Goncalves
+	@date November 2013
+	@see trie.c
+	@warning This implementation is reentrant, but it is not thread safe. The same trie instance cannot be fed into this implementation from different threads concurrently. 
+	Upper caller needs to make the necessary use of mutexes or other synchronization primitives.
+*/
+
 /** A node in a trie. */
 struct trie_node {
 	char is_word; /**<Indicates if the path from root down to this node denotes a word */
@@ -39,6 +59,7 @@ struct trie_node_stack {
 
 /* These functions are documented in the C file that implements them */
 struct trie_t *init_trie(void (*free_function)(void *), int (*is_valid)(char), char (*pos_to_char)(int), int (*char_to_pos)(char), int edges);
+void destroy_trie(struct trie_t *trie, int free_data);
 int add_word_trie(struct trie_t *trie, char *word, void *data);
 void *delete_word_trie(struct trie_t *trie, char *word);
 void *find_word_trie(struct trie_t *trie, char *word);

@@ -2,6 +2,9 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
+#include <ctype.h>
+#include "trie.h"
 #include "client_list.h"
 
 /** @file
@@ -9,87 +12,128 @@
 	
 	This file implements the available operations on the clients list. It is a wrapper for trie operations, and it is thread safe.
 	
+	Developers are adviced to read RFC Section 2.3.1 to learn about which characters are allowed in a nickname.
+	Note that, according to RFC Section 2.2, due to IRC's scandinavian origin, the characters `{ } |` are considered to be the lower case equivalents of the characters `[ ] \\`, respectively.
+	This is a critical issue when determining the equivalence of two nicknames.
+	
+	Every function in this file is thread safe, with the exception of `client_list_init()` and `client_list_destroy()`, which shall be called exactly once by the master process before any thread is created and
+	after every thread is dead, respectively.
+	
 	@author Filipe Goncalves
 	@date November 2013
 	@todo Ensure thread safety in every function
-	@todo Move MAX_FILES_OPEN to the configuration file (when we have one...)
-	@todo Drop this crappy linked list / half hash representation. Choose a trie instead, where each node points to a client; this will allow for efficient lookup and wildcard matching in the future.
-	@todo If no trie is to be used, implement the hash function.
+	@todo Move MAX_LOCAL_CLIENTS to the configuration file (when we have one...), or determine it at compile time
 	@todo Implement find_by_nick
-	@todo Rename MAX_FILES_OPEN: even though the number of local clients is bounded by max files allowed for the server process, remote clients don't count.
 */
 
-/** Size of the list */
-#define MAX_FILES_OPEN 1024
+/** How many clients are allowed to be on this server */
+#define MAX_LOCAL_CLIENTS 1024
 
+/** Defines the size of the alphabet (letters in `[a-z]`). */
+#define NICK_ALPHABET_SIZE 26
+/** Defines how many special characters are allowed */
+#define NICK_SPECIAL_CHARS_SIZE 9
+/** Says how many edges a trie's node will have */
+#define NICK_EDGES_NO NICK_ALPHABET_SIZE+NICK_SPECIAL_CHARS_SIZE
 
-/** A node on the client's list. */
-struct client_lst {
-	struct irc_client *client; /**<pointer to the client instance */
-	struct client_lst *next; /**<pointer to the next client */
-};
+/** A trie to hold every client */
+static struct trie_t *clients;
 
-/** Hash table implementation. Each array position holds a list of clients for which every node N has the same hash value. */
-static struct client_lst *clients[MAX_FILES_OPEN];
+/** A mutex to handle concurrent access to `clients` */
+pthread_mutex_t clients_mutex;
 
-/** Computes the hash for a given characters sequence.
-	@param str The string to hash
-	@return The hash value - something >= 0 and < MAX_FILES_OPEN
+/** This function defines what characters are allowed inside a nickname. See RFC Section 2.3.1 to learn about this.
+	@param s The character to check.
+	@return `1` if `s` is allowed in a nickname; `0` otherwise.
 */
-static int hash(char *str) {
-	return 0;
+static int is_valid(char s) {
+	return (((s) >= 'a' && (s) <= 'z') || ((s) >= 'A' && (s) <= 'Z') || (s) == '-' || (s) == '[' || (s) == ']' || (s) == '\\' || (s) == '`' || (s) == '^' || (s) == '{' || s == '}' || s =='|');
 }
 
-/* Documented in header file client_list.h */
+/** Translates from an ID of a special character (a character not in `[a-z]` back to its corresponding character.
+	@param i ID
+	@return The special character whose ID is `i`
+*/
+static inline char special_id_to_char(int i) {
+	return ((i) == 0 ? '-' : (i) == 1 ? '{' : (i) == 2 ? '}' : (i) == 3 ? '|' : (i) == 4 ? '`' : (i) == 5 ? '^' : -1);
+}
+
+/** Converts a character ID back into its corresponding character.
+	@param i ID
+	@return The character whose ID is `i`
+*/
+static char pos_to_char(int i) {
+	return ((char) (((i) < NICK_ALPHABET_SIZE) ? ('a'+(i)) : special_id_to_char((i) - NICK_ALPHABET_SIZE)));
+}
+
+/** Translates from a special character (a character not in `[a-z]` into its ID.
+	@param s A special character
+	@return `s`'s ID
+*/
+static inline int special_char_id(char s) {
+	return ((s) == '-' ? 0 : s == '[' || s == '{' ? 1 : s == ']' || s == '}' ? 2 : s == '\\' || s == '|' ? 3 : s == '`' ? 4 : s == '^' ? 5 : -1);
+}
+
+/** Converts a character into its ID
+	@param s The character
+	@return `s`'s ID
+*/
+static int char_to_pos(char s) {
+	return ((((s) >= 'a' && (s) <= 'z') || ((s) >= 'A' && (s) <= 'Z')) ? tolower((unsigned char) (s)) - 'a' : NICK_ALPHABET_SIZE + special_char_id(s));
+}
+
+/** Initializes clients list by creating an empty trie. Initializes `clients_mutex`.
+	The trie will be passed pointers to the functions `is_valid()`, `pos_to_char()`, and `char_to_pos()`. This set of functions defines a valid nickname.
+	@warning This function must be called exactly once, by the master process, before any thread is created and tries to access the list of clients.
+ */
+void client_list_init(void) {
+	clients = init_trie(NULL, is_valid, pos_to_char, char_to_pos, NICK_EDGES_NO);
+	pthread_mutex_init(&clients_mutex, NULL);
+}
+
+/** Destroys a clients list after it is no longer needed. Frees `clients_mutex`.
+	@warning This function must be called exactly once, by the master process, after every thread is dead and no more accesses to the list of clients will be performed.
+ */
+void client_list_destroy(void) {
+	destroy_trie(clients, 0);
+	pthread_mutex_destroy(&clients_mutex);
+}
+
+/** Finds a client by nickname.
+	@param nick The nickname to look for; must be a null terminated characters sequence.
+	@return `NULL` if no such client exists, or if `nick` contains invalid characters.
+			Pointer to `struct irc_client` of the specified client otherwise.
+*/
 struct irc_client *client_list_find_by_nick(char *nick) {
-	return NULL;
+	struct irc_client *ret;
+	pthread_mutex_lock(&clients_mutex);
+	ret = (struct irc_client *) find_word_trie(clients, nick);
+	pthread_mutex_unlock(&clients_mutex);
+	return ret;
 }
 
-/* Documented in header file client_list.h */
-void client_list_add(struct irc_client *new_client) {
-	int pos;
-	struct client_lst *new_element;
-	
-	new_element = malloc(sizeof(struct client_lst));
-	new_element->client = new_client;
-	pos = hash(new_client->nick);
-	new_element->next = clients[pos];
-	clients[pos] = new_element;
+/** Adds a client to the clients list. Assumes that there isn't any client with the same nickname as the nick given.
+	@param client Pointer to the new client. Cannot be `NULL`.
+	@param newnick Nickname for this client.
+	@return `0` on success; `-1` if this client's nickname contains invalid characters, in which case nothing was added to the list.
+	@warning The caller must check first, by calling `client_list_find_by_nick()`, if there's already a client with the same name.
+	@warning This function does not update `client->nick` to `newnick`.
+	@note `newnick` is assumed to be `client`'s nickname, no matter whatever is stored in `client->nick`. This is to ease the task of adding new clients which may contain invalid characters in their nickname, but
+		  we haven't yet found out.
+*/
+int client_list_add(struct irc_client *client, char *newnick) {
+	int ret;
+	pthread_mutex_lock(&clients_mutex);
+	ret = add_word_trie(clients, newnick, (void *) client);
+	pthread_mutex_unlock(&clients_mutex);
+	return ret;	
 }
 
-/* Documented in header file client_list.h */
+/** Deletes a client from the clients list. If no such client exists, nothing happens.
+	@param client Pointer to the client that shall be deleted. Cannot be `NULL`.
+*/
 void client_list_delete(struct irc_client *client) {
-	struct client_lst *curr, *prev;
-	int pos;
-	
-	pos = hash(client->nick);
-	
-	for (prev = NULL, curr = clients[pos]; curr != NULL && curr->client != client; prev = curr, curr = curr->next)
-		; /* Intentionally left blank */
-	if (curr == NULL) {
-		/* Huh?! ... no such client */
-		return;
-	}
-	if (prev != NULL) {
-		prev->next = curr->next;
-	}
-	else {
-		clients[pos] = curr->next;
-	}
-	free(curr);
-}
-
-/* Documented in header file client_list.h */
-void notify_all_clients(char *msg, char *nick, int msg_size) {
-	int i;
-	struct client_lst *lst_iter;
-	
-	for (i = 0; i < sizeof(clients)/sizeof(clients[0]); i++) {
-		for (lst_iter = clients[i]; lst_iter != NULL; lst_iter = lst_iter->next) {
-			write(lst_iter->client->socket_fd, "<", 1);
-			write(lst_iter->client->socket_fd, nick, strlen(nick));
-			write(lst_iter->client->socket_fd, "> ", 2);
-			write(lst_iter->client->socket_fd, msg, msg_size);
-		}
-	}
+	pthread_mutex_lock(&clients_mutex);
+	delete_word_trie(clients, client->nick);
+	pthread_mutex_unlock(&clients_mutex);
 }
