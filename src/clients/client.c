@@ -22,7 +22,6 @@
 	@todo Implement timeouts
 	@todo Move client message exchanching routines to another file
 	@todo Implement IRC commands :)
-	@todo Each client must have a mutex to control access to his socket.
 */
 
 static void manage_client_messages(EV_P_ ev_io *watcher, int revents);
@@ -30,6 +29,7 @@ static int new_client_connection(char *ip_addr, int socket);
 static void destroy_client(struct irc_client *client);
 static void free_client(struct irc_client *client);
 
+void free_thread_arguments(struct irc_client_args_wrapper *);
 /** Accepts a new client's connection. This function is indirectly called by the threads scheduler. When a new client pops in, the main process allocates a new thread whose init function is this one.
 	This function is used as a wrapper to an internal function. Its purpose is to extract the arguments information that was packed in `irc_client_args_wrapper` and pass them to an internal function
 	that does the rest of the job.
@@ -48,7 +48,7 @@ void *new_client(void *args) {
 	
 	sockfd = arguments->socket;
 	ip = strdup(arguments->ip_addr);
-	free(args);
+	free_thread_arguments(arguments);
 	
 	if (new_client_connection(ip, sockfd) == 0) {
 		fprintf(stderr, "::client.c:new_client(): Could not allocate memory for new client\n");

@@ -174,11 +174,18 @@ static void connection_cb(EV_P_ ev_io *w, int revents) {
 	thread_arguments->socket = newsock_fd;
 	thread_arguments->ip_addr = strdup(inet_ntoa(cli_addr.sin_addr));
 	
-	/* thread_arguments will be free()'d inside new_client() */
-	
+	/* thread_arguments will timely be freed by the new thread by calling free_thread_arguments() */
 	if (pthread_create(&thread_id, &thread_attr, new_client, (void *) thread_arguments) < 0) {
 		perror("::yaircd.c:connection_cb(): could not create new thread");
 		close(newsock_fd);
 		return;
 	}
+}
+
+/** This is called by a client thread everytime its arguments structure is not needed anymore.
+	@param args A pointer to the arguments structure that was passed to the thread's initialization function.
+*/
+void free_thread_arguments(struct irc_client_args_wrapper *args) {
+	free(args->ip_addr);
+	free(args);
 }
