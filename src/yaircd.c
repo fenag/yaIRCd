@@ -86,6 +86,8 @@ int ircd_boot(void) {
 	}
 	clilen = sizeof(cli_addr);
 	
+	
+	
 	/* Initialize thread creation attributes */
 	if (pthread_attr_init(&thread_attr) != 0) {
 		/* On Linux, this will never happen */

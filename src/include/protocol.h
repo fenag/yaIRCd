@@ -19,7 +19,7 @@
 
 /* Protocol limits */
 /** Max. message size, including terminating \\r\\n, as specified in Section 2.3 */
-#define MAX_MSG_SIZE 512
+#define MAX_MSG_SIZE ((size_t) 512)
 
 /** Max. number of parameters in an IRC message, as specified in Section 2.3 */
 #define MAX_IRC_PARAMS 15
