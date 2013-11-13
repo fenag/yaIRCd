@@ -386,4 +386,10 @@
 #define RPL_ADMINEMAIL 259U
 /* End command responses */
 
+/* Quit messages */
+/** Quit message for when a client exits voluntarily with a QUIT command, but no reason is given, or
+	the connection was closed without a QUIT command
+ */
+#define QUIT_NO_REASON "Client exited."
+
 #endif /* __PROTOCOL_SPECS_GUARD__ */

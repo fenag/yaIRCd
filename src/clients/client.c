@@ -156,6 +156,7 @@ static struct irc_client *create_client(char *ip_addr, int socket) {
 	new_client->realname = NULL;
 	new_client->nick = NULL;
 	new_client->username = NULL;
+	new_client->quit_msg = NULL;
 	return new_client;
 }
 
@@ -179,12 +180,17 @@ static struct irc_client *create_client(char *ip_addr, int socket) {
 		  We think this is great advice, but is not very applicable to sockets. We're killing this client anyway, why bother with some final errors on his socket? Thus, the return value for `close()` is ignored.
 	@note Every exiting path for a client ends up his thread with `pthread_exit()`. This destructor is always called when the client exits the server. Due to `pthread_exit()`'s nature, we don't actually ever return
 	back to `new_client()`.
+	@todo Notify other clients when someone leaves.
 */
 void destroy_client(void *arg) {
 	struct irc_client *client = (struct irc_client *) arg;
 	if (client->is_registered) {
 		client_list_delete(client);
 	}
+	/* TODO Notify other clients on the same channel that this client is leaving 
+	   client->quit_msg will hold a fresh copy of this client's quit message.
+	   It can be NULL; in that case, QUIT_NO_REASON (from protocol.h) shall be used.
+	*/
 	free_client(client);
 }
 
@@ -203,6 +209,7 @@ static void free_client(struct irc_client *client) {
 	free(client->nick);
 	free(client->username);
 	free(client->server);
+	free(client->quit_msg);
 	close(client->socket_fd);
 	ev_io_stop(client->ev_loop, &client->ev_watcher); /* Stop the callback mechanism */
 	ev_break(client->ev_loop, EVBREAK_ONE); /* Stop iterating */
