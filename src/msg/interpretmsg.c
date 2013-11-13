@@ -1,7 +1,7 @@
 #include <string.h>
 #include <pthread.h>
 #include "protocol.h"
-#include "sendmsg.h"
+#include "msgio.h"
 #include "interpretmsg.h"
 #include "wrappers.h"
 #include "client_list.h"

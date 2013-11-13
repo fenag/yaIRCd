@@ -4,7 +4,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include "protocol.h"
-#include "sendmsg.h"
+#include "msgio.h"
 #include "wrappers.h"
 
 /** @file
@@ -32,6 +32,39 @@ inline void write_to(struct irc_client *client, char *buf, size_t len) {
 	}
 	else {
 		/* Write to SSL socket... */
+	}
+}
+
+/** This function knows how to read from a client socket. It is an abstraction used by every function that wants to read from a client.
+	It knows how to deal with plaintext sockets and SSL sockets. No other function in the whole ircd should worry about this.
+	@param client The client to read from.
+	@param buf Buffer to store the message read.
+	@param len Maximum length of the message. This is usually bounded by the size of `buf`. This parameter avoids buffer overflow.
+	@return A positive (`>= 0`) integer denoting the number of characters read and stored in `buf`.
+	@warning `buf` is not null terminated. The caller must use the return value to know where `buf`'s contents end. Typically, the caller will pass a buffer
+			  with enough space for `j` characters, but will pass a value for `len` equal to `j-1`. This will bound the number of written characters, `i`, to `j-1`, so that
+			  the string can then be null terminated with `buf[i] = &lsquo;\\0&rsquo;`.
+	@note If there is a fatal error with this socket, or if the connection from the client side was shut down, this function will call `pthread_exit()`. As a consequence, the returned value is always
+		  a positive integer.
+*/
+inline int read_from(struct irc_client *client, char *buf, size_t len) {
+	int msg_size;
+	if (!client->uses_ssl) {
+		msg_size = recv(client->socket_fd, buf, len, 0);
+		if (msg_size == 0) {
+			/* 0 indicates an orderly shutdown from the client side (typically TCP RST) */
+			pthread_exit(NULL);
+		}
+		if (msg_size == -1) {
+			/* Something went wrong with this socket, drop this client */
+			pthread_exit(NULL);
+		}
+		/* assert: msg_size > 0 && msg_size <= len */
+		return msg_size;
+	}
+	else {
+		/* Read from SSL socket... */
+		return 0;
 	}
 }
 

@@ -11,7 +11,7 @@
 #include "protocol.h"
 #include "wrappers.h"
 #include "parsemsg.h"
-#include "sendmsg.h"
+#include "msgio.h"
 #include "interpretmsg.h"
 
 /** @file
@@ -112,16 +112,7 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 		return;
 	}
 	client = (struct irc_client *) watcher;
-	msg_size = recv(client->socket_fd, msg_in, MAX_MSG_SIZE, 0);
-	if (msg_size == 0) {
-		/* 0 indicates an orderly shutdown from the client side (typically TCP RST) */
-		pthread_exit(NULL);
-	}
-	if (msg_size == -1) {
-		perror("::client.c:manage_client_messages(): error while attempting to read from socket");
-		pthread_exit(NULL);
-	}
-	
+	msg_size = read_from(client, msg_in, MAX_MSG_SIZE);
 	/* assert: msg_size > 0 && msg_size <= MAX_MSG_SIZE
 	   It is safe to write to msg_in[msg_size] since we have space for MAX_MSG_SIZE+1 chars
 	*/
