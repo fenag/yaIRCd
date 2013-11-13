@@ -2,6 +2,7 @@
 #include <string.h>
 #include "protocol.h"
 #include "sendreply.h"
+#include "wrappers.h"
 
 /** @file
 	@brief Implementation for send_* functions.
@@ -15,8 +16,8 @@
 */
 void send_err_notregistered(struct irc_client *client) {
 	char desc[] = " :You have not registered";
-	write(client->socket_fd, ERR_NOTREGISTERED, NUMREPLY_WIDTH);
-	write(client->socket_fd, desc, sizeof(desc)-1);
+	send_to(client->socket_fd, ERR_NOTREGISTERED, NUMREPLY_WIDTH, 0);
+	send_to(client->socket_fd, desc, sizeof(desc)-1, 0);
 }
 
 /** Sends ERR_UNKNOWNCOMMAND to a client who seems to be messing around with commands.
@@ -29,15 +30,15 @@ void send_err_notregistered(struct irc_client *client) {
 void send_err_unknowncommand(struct irc_client *client, char *cmd) {
 	char desc[] = " :Unknown command";
 	char emptycmd[] = " NULL_CMD";
-	write(client->socket_fd, ERR_UNKNOWNCOMMAND, NUMREPLY_WIDTH);
+	send_to(client->socket_fd, ERR_UNKNOWNCOMMAND, NUMREPLY_WIDTH, 0);
 	if (*cmd != '\0') {
-		write(client->socket_fd, " ", (size_t) 1);
-		write(client->socket_fd, cmd, strlen(cmd));
+		send_to(client->socket_fd, " ", (size_t) 1, 0);
+		send_to(client->socket_fd, cmd, strlen(cmd), 0);
 	}
 	else {
-		write(client->socket_fd, emptycmd, sizeof(emptycmd)-1);
+		send_to(client->socket_fd, emptycmd, sizeof(emptycmd)-1, 0);
 	}
-	write(client->socket_fd, desc, sizeof(desc)-1);
+	send_to(client->socket_fd, desc, sizeof(desc)-1, 0);
 }
 
 /** Sends ERR_NONICKNAMEGIVEN to a client who issued a NICK command but didn't provide a nick
@@ -45,8 +46,8 @@ void send_err_unknowncommand(struct irc_client *client, char *cmd) {
 */
 void send_err_nonicknamegiven(struct irc_client *client) {
 	char desc[] = " :No nickname given";
-	write(client->socket_fd, ERR_NONICKNAMEGIVEN, NUMREPLY_WIDTH);
-	write(client->socket_fd, desc, sizeof(desc)-1);
+	send_to(client->socket_fd, ERR_NONICKNAMEGIVEN, NUMREPLY_WIDTH, 0);
+	send_to(client->socket_fd, desc, sizeof(desc)-1, 0);
 }
 
 /** Sends ERR_NEEDMOREPARAMS to a client who issued a command but didn't provide enough parameters for his request to be fulfilled
@@ -56,9 +57,9 @@ void send_err_nonicknamegiven(struct irc_client *client) {
 */
 void send_err_needmoreparams(struct irc_client *client, char *cmd) {
 	char desc[] = " :Not enough parameters";
-	write(client->socket_fd, ERR_NEEDMOREPARAMS, NUMREPLY_WIDTH);
-	write(client->socket_fd, " ", 1);
-	write(client->socket_fd, cmd, strlen(cmd));
-	write(client->socket_fd, desc, sizeof(desc)-1);
+	send_to(client->socket_fd, ERR_NEEDMOREPARAMS, NUMREPLY_WIDTH, 0);
+	send_to(client->socket_fd, " ", 1, 0);
+	send_to(client->socket_fd, cmd, strlen(cmd), 0);
+	send_to(client->socket_fd, desc, sizeof(desc)-1, 0);
 }
 
