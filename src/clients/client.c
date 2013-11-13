@@ -3,12 +3,15 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <ev.h>
+#include <pthread.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include "client.h"
 #include "client_list.h"
 #include "protocol.h"
 #include "wrappers.h"
 #include "parsemsg.h"
-#include "sendreply.h"
+#include "msgio.h"
 #include "interpretmsg.h"
 
 /** @file
@@ -22,13 +25,13 @@
 	@todo Implement timeouts
 	@todo Move client message exchanching routines to another file
 	@todo Implement IRC commands :)
-	@todo Each client must have a mutex to control access to his socket.
 */
 
 static void manage_client_messages(EV_P_ ev_io *watcher, int revents);
-static int new_client_connection(char *ip_addr, int socket);
-static void destroy_client(struct irc_client *client);
+void destroy_client(void *arg);
 static void free_client(struct irc_client *client);
+static struct irc_client *create_client(char *ip_addr, int socket);
+void free_thread_arguments(struct irc_client_args_wrapper *);
 
 /** Accepts a new client's connection. This function is indirectly called by the threads scheduler. When a new client pops in, the main process allocates a new thread whose init function is this one.
 	This function is used as a wrapper to an internal function. Its purpose is to extract the arguments information that was packed in `irc_client_args_wrapper` and pass them to an internal function
@@ -43,17 +46,33 @@ static void free_client(struct irc_client *client);
 */
 void *new_client(void *args) {
 	struct irc_client_args_wrapper *arguments = (struct irc_client_args_wrapper *) args;
+	struct irc_client *client;
 	int sockfd;
 	char *ip;
 	
 	sockfd = arguments->socket;
 	ip = strdup(arguments->ip_addr);
-	free(args);
+	free_thread_arguments(arguments);
 	
-	if (new_client_connection(ip, sockfd) == 0) {
-		fprintf(stderr, "::client.c:new_client(): Could not allocate memory for new client\n");
-		free(ip);
+	if (ip == NULL || (client = create_client(ip, sockfd)) == NULL) {
+		close(sockfd);
+		return NULL;
 	}
+
+	pthread_cleanup_push(destroy_client, (void *) client);
+	
+	/* At this point, we have:
+		- A client structure successfully allocated
+		- An events loop and a watcher
+		- A thread's cleanup handler to exit gracefully
+	  Let the party begin! 
+	 */
+	ev_io_init(&client->ev_watcher, manage_client_messages, sockfd, EV_READ);
+	ev_io_start(client->ev_loop, &client->ev_watcher);	
+	ev_run(client->ev_loop, 0); /* Go */
+	
+	/* This is never reached, but we need to pair up push() and pop() calls */
+	pthread_cleanup_pop(0);
 	
 	return NULL;
 }
@@ -93,23 +112,12 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 		return;
 	}
 	client = (struct irc_client *) watcher;
-	msg_size = read(client->socket_fd, msg_in, (size_t) MAX_MSG_SIZE);
-	if (msg_size == 0) {
-		/* Broken pipe - client process ended abruptly */
-		destroy_client(client);
-		return;
-	}
-	if (msg_size == -1) {
-		perror("::client.c:manage_client_messages(): error while attempting to read from socket");
-		destroy_client(client);
-		return;
-	}
+	msg_size = read_from(client, msg_in, MAX_MSG_SIZE);
 	/* assert: msg_size > 0 && msg_size <= MAX_MSG_SIZE
 	   It is safe to write to msg_in[msg_size] since we have space for MAX_MSG_SIZE+1 chars
 	*/
 	msg_in[msg_size] = '\0'; /* Ensures the message is null-terminated, as required by parsemsg() */
 	parse_res = parse_msg(msg_in, msg_size, &prefix, &cmd, params, &params_no);
-	
 	if (parse_res == -1) {
 		if (!client->is_registered) {
 			/* RFC Section 4.1: until the connection is registered, the server must respond to any non-registration commands with ERR_NOTREGISTERED */
@@ -125,69 +133,86 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 	}
 }
 
-/** This is the function that gets called by `new_client()` to create a new client instance. It allocs memory for a new `irc_client` instance and initializes the `hostname`, `socket_fd`, `ev_loop` and `ev_watcher` fields.
-	`ev_loop` is a regular loop created with `ev_loop_new(0)`.
-	`ev_watcher` is initialized with `manage_client_messages()` as a callback function.
-	Note that, as a consequence, every client's thread will hold a loop of its own to manage this client's network I/O.
-	After initializing the new user, it begins execution of the events loop. Thus, this function will not return until the loop is broken, which is done by `manage_client_messages()`. When that happens, the loop is
-	destroyed, and every resource that was alloced for this client is `free()`'d.
-	@param ip_addr A characters sequence describing the client's IP address. IPv4 only.
-	@param socket socket file descriptor for the new client.
-	@return `0` if no resources are available to register this client;
-			`1` if everything worked smoothly
+/** Creates a new client instance that will be used throughout this client's lifetime.
+	@param ip_addr Pointer to a characters sequence describing this client's ip address
+	@param socket Socket descriptor for this client.
+	@return `NULL` if there aren't enough resources to create a new client; otherwise, pointer to `struct irc_client` for this user.
+	@warning `ip_addr` is used as is; no string duplication happens.
 */
-static int new_client_connection(char *ip_addr, int socket) {
+static struct irc_client *create_client(char *ip_addr, int socket) {
 	struct irc_client *new_client;
-	if ((new_client = malloc(sizeof(struct irc_client))) == NULL)
-		return 0;
-
+	if ((new_client = malloc(sizeof(struct irc_client))) == NULL) {
+		return NULL;
+	}
+	if ((new_client->ev_loop = ev_loop_new(0)) == NULL) {
+		free(new_client);
+		return NULL;
+	}
 	new_client->hostname = ip_addr;
 	new_client->socket_fd = socket;
-	new_client->ev_loop = ev_loop_new(0);
 	new_client->server = NULL; /* local client */
 	new_client->is_registered = 0;
-	
-	/* Initialize unknown information - wait for client registration */
+	new_client->uses_ssl = 0;
 	new_client->realname = NULL;
 	new_client->nick = NULL;
 	new_client->username = NULL;
-	
-	ev_io_init(&new_client->ev_watcher, manage_client_messages, socket, EV_READ);
-	ev_io_start(new_client->ev_loop, &new_client->ev_watcher);	
-	/* Wait for messages coming from client */
-	ev_run(new_client->ev_loop, 0);
-	/* When we get here, the loop was broken by destroy_client(), we can now free it */
-	ev_loop_destroy(new_client->ev_loop);
-	free(new_client);
-	return 1;
+	new_client->quit_msg = NULL;
+	return new_client;
 }
 
-/** Called everytime connection is lost with a client, either because it was abruptly closed, or the client manually issued a QUIT command.
-	It closes the socket and frees his resources with the exception of the pointer itself (`client`), and
-	the event loop. We can't free the event loop, since we're doing work inside a callback function. Instead, we stop the loop, and let control go back to `new_client_connection()` to
-	destroy the loop object.
-	@param client The client who got disconnected.
+/** This function is set by the thread init function (`new_client()`) as the cleanup handler for `pthread_exit()`, thus, this is called when a fatal error with this client occurred and
+	he needs to be kicked out of the server.
+	Examples of fatal errors are: we were writing to his socket and processing a command he sent and suddenly the connection was lost, causing write() to return an error; 
+	there's no space in client_list for this user; or something else went terribly wrong and we can't keep a connection to this user.
+	The socket is closed, every watcher is stopped, the events loop is destroyed, the client is deleted from the client's list (if his connection was registered), and every resource associated with this client is freed.
+	@param arg A pointer to a `struct irc_client` describing this client. This argument is always casted to `struct irc_client *`.
+	@warning This function is only active after we have a fully allocated client struct for this user. Problems with structure allocation are dealt earlier in `new_client()`.
+	@warning Care must be taken when killing a client. For example, deleting a client from the list can be problematic. Clients list implementation is thread safe; consider the case that this thread was doing some processing 
+	and was currently holding a lock to the clients list when a fatal error occurs, `pthread_exit()` is called, and we end up in this function. This function would try to delete the client from the list, trying to obtain 
+	the lock *again*, which would result in a deadlock, since the thread would be waiting for itself. Although it is a rare case, it is extremely undesirable, therefore, abstract implementations used by each client's thread
+	do not call `pthread_exit()` directly. Furthermore, imagine another example where we just killed the thread - what if this thread was currently holding a lock to a shared list? This lock won't be released, and from now on,
+	no other thread will ever be able to access this shared resource.
+	This is why library functions such as `client_list_add()` and others use special return values or parameters to indicate failure, so that the client's thread can decide to call `pthread_exit()` after making sure every
+	synchronization mechanism is unlocked.	
+	@note You may have wondered if closing the socket is safe, since we don't really know what happened: the socket can be invalid by this time, and closing it can yield an error.
+		  According to `close()` manpage, "Not checking the return value of `close()` is a common but nevertheless serious programming error. It is quite possible that errors on a previous `write()` operation are first
+		  reported at the final `close()`. Not checking the return value when closing the file may lead to silent loss of data. This can especially be observed with NFS and with disk quota."
+		  We think this is great advice, but is not very applicable to sockets. We're killing this client anyway, why bother with some final errors on his socket? Thus, the return value for `close()` is ignored.
+	@note Every exiting path for a client ends up his thread with `pthread_exit()`. This destructor is always called when the client exits the server. Due to `pthread_exit()`'s nature, we don't actually ever return
+	back to `new_client()`.
+	@todo Notify other clients when someone leaves.
 */
-static void destroy_client(struct irc_client *client) {
+void destroy_client(void *arg) {
+	struct irc_client *client = (struct irc_client *) arg;
 	if (client->is_registered) {
 		client_list_delete(client);
 	}
+	/* TODO Notify other clients on the same channel that this client is leaving 
+	   client->quit_msg will hold a fresh copy of this client's quit message.
+	   It can be NULL; in that case, QUIT_NO_REASON (from protocol.h) shall be used.
+	*/
 	free_client(client);
 }
 
 /** Auxiliary function called by `destroy_client()` to free a client's resources.
-	It frees every dynamic alloced resource, closes the socket, stops the callback mechanism (detaches the watcher from the events loop), and breaks this client's
-	ev_loop. Control should return back to `new_client_connection()` after the loop is broken.
-	As a consequence, this function does not free the client pointer itself, nor does it destroy the event loop.
+	It frees every dynamic allocated resource, closes the socket, stops the callback mechanism by detaching the watcher from the events loop, and destroys this client's
+	ev_loop.
 	@param client The client to free
 */
 static void free_client(struct irc_client *client) {
+	/* Some fields, such as client->realname, can be NULL if the client is not registered.
+	   This is not a problem though: free(NULL) is defined and is safe to call, according to
+	   the POSIX specification.
+	 */
 	free(client->realname);
 	free(client->hostname);
 	free(client->nick);
 	free(client->username);
 	free(client->server);
+	free(client->quit_msg);
 	close(client->socket_fd);
 	ev_io_stop(client->ev_loop, &client->ev_watcher); /* Stop the callback mechanism */
 	ev_break(client->ev_loop, EVBREAK_ONE); /* Stop iterating */
+	ev_loop_destroy(client->ev_loop);
+	free(client);
 }

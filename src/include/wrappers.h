@@ -1,5 +1,6 @@
 #ifndef __YAIRCD_F_WRAPPERS__
 #define __YAIRCD_F_WRAPPERS__
+
 /** @file
 	@brief yaIRCd function wrappers
 	

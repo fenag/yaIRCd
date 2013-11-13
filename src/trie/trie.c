@@ -25,21 +25,24 @@
 
 /** Initializes a new trie node with no children and no edges.
 	@param edges Number of edges (alphabet size)
-	@return The new node
+	@return The new node, or `NULL` if there are no resources to create a node.
 */
 static struct trie_node *init_node(int edges) {
 	int i;
 	struct trie_node *new_node;
-	
-	new_node = malloc(sizeof(struct trie_node));
+	if ((new_node = malloc(sizeof(struct trie_node))) == NULL) {
+		return NULL;
+	}
 	new_node->is_word = 0;
 	new_node->children = 0;
 	new_node->data = NULL;
-	new_node->edges = malloc(sizeof(*new_node->edges)*edges);
-	
-	for (i = 0; i < edges; i++)
+	if ((new_node->edges = malloc(sizeof(*new_node->edges)*edges)) == NULL) {
+		free(new_node);
+		return NULL;
+	}
+	for (i = 0; i < edges; i++) {
 		new_node->edges[i] = NULL;
-	
+	}
 	return new_node;
 }
 
@@ -49,12 +52,17 @@ static struct trie_node *init_node(int edges) {
 	@param pos_to_char Pointer to function that converts an index position from `edges` back to its character representation.
 	@param char_to_pos Pointer to function that converts a character `s` into a valid, unique position that is used to index `edges`.
 	@param edges How many edges each node is allowed to have, that is, the size of this trie's alphabet.
-	@return A new trie instance with no words.
+	@return A new trie instance with no words, or `NULL` if there isn't enough memory to create a trie.
 */
 struct trie_t *init_trie(void (*free_function)(void *), int (*is_valid)(char), char (*pos_to_char)(int), int (*char_to_pos)(char), int edges) {
 	struct trie_t *trie;
-	trie = malloc(sizeof(struct trie_t));
-	trie->root = init_node(edges);
+	if ((trie = malloc(sizeof(struct trie_t))) == NULL) {
+		return NULL;
+	}
+	if ((trie->root = init_node(edges)) == NULL) {
+		free(trie);
+		return NULL;
+	}
 	trie->free_f = free_function;
 	trie->is_valid = is_valid;
 	trie->pos_to_char = pos_to_char;
@@ -79,7 +87,7 @@ static inline void free_child(struct trie_node *node, unsigned char pos) {
 /** Recursively frees every node reachable from `node`.
 	@param node The top node (in the beginning, most likely the root node).
 	@param trie A trie, as returned by `init_trie()`.
-	@param free_data `1` if the free function stored in `trie` shall be used to free each node's data, `0` otherwise
+	@param free_data `FLAG_FREE_DATA` if the free function stored in `trie` shall be used to free each node's data, `FLAG_NO_FREE_DATA` otherwise
 */
 static void destroy_aux(struct trie_node *node, struct trie_t *trie, int free_data) {
 	int i;
@@ -88,7 +96,7 @@ static void destroy_aux(struct trie_node *node, struct trie_t *trie, int free_da
 			destroy_aux(node->edges[i], trie, free_data);
 		}
 	}
-	if (free_data) {
+	if (free_data == FLAG_FREE_DATA) {
 		(*trie->free_f)(node->data);
 	}
 	free(node->edges);
@@ -97,7 +105,7 @@ static void destroy_aux(struct trie_node *node, struct trie_t *trie, int free_da
 
 /** Frees every allocated storage for a trie.
 	@param trie A trie, as returned by `init_trie()`.
-	@param free_data `1` if the `data` field of each node is to be free'd by the free function previously specified; `0` otherwise
+	@param free_data `FLAG_FREE_DATA` if the free function stored in `trie` shall be used to free each node's data, `FLAG_NO_FREE_DATA` otherwise
 */
 void destroy_trie(struct trie_t *trie, int free_data) {
 	destroy_aux(trie->root, trie, free_data);
@@ -109,26 +117,35 @@ void destroy_trie(struct trie_t *trie, int free_data) {
 	@param trie A trie, as returned by `init_trie()`.
 	@param word The word to add. Must be a null-terminated characters sequence.
 	@param data The data to associate to this word.
-	@return `0` on success; `-1` if `word` contains invalid characters, in which case the trie remains unchanged.
+	@return On success, 0 is returned. Otherwise, a non-zero constant is returned to denote an error, which can be either `TRIE_INVALID_WORD` or `TRIE_NO_MEM`.
+			`TRIE_INVALID_WORD` means that there are characters in `word` that are no part of this trie's alphabet, as defined by the functions indicated in `init_trie()`.
+			`TRIE_NO_MEM` means that there wasn't enough memory to add `word`. In this case, it is undefined whether `word` is valid or not: it just means that we couldn't keep on
+			checking the word and adding the necessary structures anymore.
+			When an error occurs, the trie remains unchanged.
 	@note If the word already exists, its `data` will now point to the new data. Care must be taken not to lose reference to the old data.
 */
 static int add_word_trie_aux(struct trie_node *root, char *word, struct trie_t *trie, void *data) {
 	unsigned char pos;
+	int ret;
 	if (*word == '\0') {
 		root->is_word = 1;
 		root->data = data;
 		return 0;
 	} else {
 		if (!(*trie->is_valid)(*word)) {
-			return -1;
+			return TRIE_INVALID_WORD;
 		}
 		if (root->edges[pos = (*trie->char_to_pos)(*word)] == NULL) {
-			root->children++;
-			root->edges[pos] = init_node(trie->edges_no);
-			if (add_word_trie_aux(root->edges[pos], word+1, trie, data) == -1) {
-				free_child(root, pos);
-				return -1;
+			if ((root->edges[pos] = init_node(trie->edges_no)) == NULL) {
+				return TRIE_NO_MEM;
 			}
+			root->children++;
+			if ((ret = add_word_trie_aux(root->edges[pos], word+1, trie, data)) != 0) {
+				/* There was an error somewhere down there */
+				free_child(root, pos);
+				return ret;
+			}
+			/* assert: ret == 0 */
 			return 0;
 		}
 		return add_word_trie_aux(root->edges[pos], word+1, trie, data);
@@ -139,7 +156,11 @@ static int add_word_trie_aux(struct trie_node *root, char *word, struct trie_t *
 	@param trie A trie, as returned by `init_trie()`.
 	@param word The word to add. Must be a null-terminated characters sequence.
 	@param data The data to associate to this word.
-	@return `0` on success; `-1` if `word` contains invalid characters, in which case the trie remains unchanged.
+	@return On success, 0 is returned. Otherwise, a non-zero constant is returned to denote an error, which can be either `TRIE_INVALID_WORD` or `TRIE_NO_MEM`.
+			`TRIE_INVALID_WORD` means that there are characters in `word` that are no part of this trie's alphabet, as defined by the functions indicated in `init_trie()`.
+			`TRIE_NO_MEM` means that there wasn't enough memory to add `word`. In this case, it is undefined whether `word` is valid or not: it just means that we couldn't keep on
+			checking the word and adding the necessary structures anymore.
+			When an error occurs, the trie remains unchanged.
 	@note If the word already exists, its `data` will now point to the new data. Care must be taken not to lose reference to the old data.
 */
 int add_word_trie(struct trie_t *trie, char *word, void *data) {
@@ -165,6 +186,7 @@ static void *delete_word_trie_aux(struct trie_node *root, char *word, struct tri
 		if (!(*trie->is_valid)(*word) || root->edges[pos = (*trie->char_to_pos)(*word)] == NULL) {
 			return NULL;
 		} else {
+			/* assert: root->edges[pos] != NULL */
 			ret = delete_word_trie_aux(root->edges[pos], word+1, trie);
 			if (root->edges[pos]->children == 0 && !root->edges[pos]->is_word) {
 				free_child(root, pos);
@@ -233,14 +255,22 @@ static inline int trie_stack_empty(struct trie_node_stack *st) {
 	@param el A trie node that is associated with this element.
 	@param depth This element's depth in the stack.
 	@param letter Last letter used to arrive to this node.
+	@return A pointer to the new node pushed, or `NULL` if there wasn't enough memory to push a new node, in which case the stack remains unchanged.
 */
-static inline void trie_push(struct trie_node_stack *st, struct trie_node *el, int depth, char letter) {
-	struct trie_node_stack_elm *new_el = malloc(sizeof(struct trie_node_stack_elm));
+static inline struct trie_node_stack_elm *trie_push(struct trie_node_stack *st, struct trie_node *el, int depth, char letter) {
+	struct trie_node_stack_elm *new_el;
+
+	if ((new_el = malloc(sizeof(struct trie_node_stack_elm))) == NULL) {
+		return NULL;
+	}
+	
 	new_el->letter = letter;
 	new_el->depth = depth;
 	new_el->next = st->top;
 	st->top = new_el;
 	new_el->el = el;
+	
+	return new_el;
 }
 
 /** Finds the next match for an on going search by prefix.
@@ -249,20 +279,28 @@ static inline void trie_push(struct trie_node_stack *st, struct trie_node *el, i
 		   It is imperative that `result` points to a memory location large enough to hold at least `st->depth` characters, of which `st->depth-1` characters will belong to the branch path.
 		   When this function returns a value that is not `NULL`, it is guaranteed that `result` is null-terminated and contains a valid match for an on going prefix search.
 	@param trie A trie, as returned by `init_trie()`
-	@return State information for the next call; `NULL` if no more matches were found. If `NULL` is returned, `result` may have been written, but its contents are meaningless.
+	@param err_code A pointer that will be used to store error conditions that may arise. In case of success, `*err_code` will be `0`. In case of error, `*err_code` holds the value of a non-zero constant describing
+		   the error. At the moment, only `TRIE_NO_MEM` is possible. When `*err_code == TRIE_NO_MEM`, it means that it was not possible to generate new state information that would otherwise be useful and necessary
+		   for future searches to continue. However, this error condition does not affect this function's correctness: `TRIE_NO_MEM` only implies that an on going search will not be able to find every possible match
+		   for a given prefix, since it cannot store new state information. Note that it can use old state information stored in previous calls, and will continue to do so even after `TRIE_NO_MEM` is signalized.
+		   Thus, it is always safe to use this function's result when it returns someting that is not `NULL`, but when `TRIE_NO_MEM` is reported, it is not guaranteed that every match will be found.
+	@return State information for the next call; `NULL` if no more matches were found. If `NULL` is returned, `result` may have been written, but its contents are meaningless, and it is not guaranteed to be null-terminated.
 	@warning If this function returns `NULL`, the contents of `result` are undefined.
 	@warning This function does not free state information when it returns `NULL`. Thus, the caller is required to save `st` in an auxiliary variable. If the same variable is used, then the reference to the last
 			 valid state is lost and it is not possible to free it anymore.
 */
-static struct trie_node_stack *find_by_prefix_next_trie_n(struct trie_node_stack *st, char *result, struct trie_t *trie) {
+static struct trie_node_stack *find_by_prefix_next_trie_n(struct trie_node_stack *st, char *result, struct trie_t *trie, int *err_code) {
 	struct trie_node_stack_elm *curr;
 	int i;
+	*err_code = 0;
 	while (!trie_stack_empty(st)) {
 		curr = trie_pop(st);
 		if (curr->depth+1 < st->depth) {
-			for (i = trie->edges_no-1; i >= 0; i--) {
+			for (i = trie->edges_no-1; i >= 0 && *err_code == 0; i--) {
 				if (curr->el->edges[i] != NULL) {
-					trie_push(st, curr->el->edges[i], curr->depth+1, (*trie->pos_to_char)(i));
+					if (trie_push(st, curr->el->edges[i], curr->depth+1, (*trie->pos_to_char)(i)) == NULL) {
+						*err_code = TRIE_NO_MEM;
+					}
 				}
 			}
 		}
@@ -297,21 +335,32 @@ void free_trie_stack(struct trie_node_stack *st);
 				<li>`NULL` if no more matches are available</li>
 				<li>Otherwise, a structure that contains state information for the next call.</li>
 			</ul>
+	@param err_code A pointer that will be used to store error conditions that may arise. In case of success, `*err_code` will be `0`. In case of error, `*err_code` holds the value of a non-zero constant describing
+		   the error. At the moment, only `TRIE_NO_MEM` is possible. When `*err_code == TRIE_NO_MEM`, it means that it was not possible to generate new state information that would otherwise be useful and necessary
+		   for future searches to continue. However, this error condition does not affect this function's correctness: `TRIE_NO_MEM` only implies that an on going search will not be able to find every possible match
+		   for a given prefix, since it cannot store new state information. Note that it can use old state information stored in previous calls, and will continue to do so even after `TRIE_NO_MEM` is signalized.
+		   Thus, it is always safe to use this function's result when it returns someting that is not `NULL`, but when `TRIE_NO_MEM` is reported, it is not guaranteed that every match will be found.
+		   This error can be reported even in the first call to this function.
 	@warning `result` may have been modified even if `NULL` was returned. In this case, its content is undefined.
 	@warning `prefix` must be a characters sequence such that `strlen(prefix) <= depth-1`. Ignoring this requirement leads to buffer overflows when writing to `result`.
 	@warning This function will have undefined behavior if it is called with a state `st` that holds information for a `prefix`, but in the meantime, words were removed that matched `prefix`. The caller must ensure that
 			 this never happens, otherwise, the program will most likely crash for accessing invalid memory positions.
-	@warning It is not allowed to call this function with old `st` values. The only valid `st` is the one that was returned by the previous call, since this function frees some of the state information as the search go along.
+	@warning It is not allowed to call this function with old `st` values. The only valid `st` is the one that was returned by the previous call, since this function frees some of the state information as the search goes along.
 			 Thus, it is assumed that the search always moves forward, and never backwards. Calling this with an old value for `st` results in undefined and erratic behavior.
 	@note If the caller no longer wishes to keep on searching, state information previously returned can be freed by calling `free_trie_stack()`. Again, only the last returned value can be freed.
-		  It is not required to call `free_trie_stack()` after no more matches exist, and in fact it is not allowed to. After no more matches exist, this function automatically frees state information. 
+		  It is not required to call `free_trie_stack()` after no more matches exist, and in fact it is not allowed to. After no more matches exist, this function automatically frees state information.
+	@note It is important to note that everytime this function returns `NULL`, one shall not call `free_trie_stack()`. This function will implicitly free state information when no more matches are found.
+	@note It is always safe to use `result` as a valid match as long as this function does not return `NULL`. If `*err_code == TRIE_NO_MEM`, it just means that subsequent searches may end prematurely, and that
+		  not every match will possibly be returned.
 */
-struct trie_node_stack *find_by_prefix_next_trie(struct trie_t *trie, struct trie_node_stack *st, const char *prefix, int depth, char *result) {
+struct trie_node_stack *find_by_prefix_next_trie(struct trie_t *trie, struct trie_node_stack *st, const char *prefix, int depth, char *result, int *err_code) {
 	struct trie_node *n;
 	struct trie_node_stack *new_st;
 	const char *ptr;
 	int i;
 	int size;
+	
+	*err_code = 0;
 	if (st == NULL) {
 		for (size = 0, n = trie->root, ptr = prefix; *ptr != '\0'; ptr++, size++) {
 			if (!(*trie->is_valid)(*ptr) || (n = n->edges[(*trie->char_to_pos)(*ptr)]) == NULL) {
@@ -319,16 +368,27 @@ struct trie_node_stack *find_by_prefix_next_trie(struct trie_t *trie, struct tri
 			}
 		}
 		/* assert: n != NULL */
-		st = malloc(sizeof(struct trie_node_stack));
+		if ((st = malloc(sizeof(struct trie_node_stack))) == NULL) {
+			return NULL;
+		}
+		if ((st->prefix = strdup(prefix)) == NULL) {
+			free(st);
+			return NULL;
+		}
+		if ((st->path = malloc(depth-size)) == NULL) {
+			free(st->prefix);
+			free(st);
+			return NULL;
+		}
 		st->top = NULL;
-		st->prefix = strdup(prefix);
-		st->path = malloc(depth-size);
 		st->depth = depth-size;
 		if (st->depth > 1) {
 			/* We can still write at least 1 char in result */
-			for (i = trie->edges_no-1; i >= 0; i--) {
+			for (i = trie->edges_no-1; i >= 0 && *err_code == 0; i--) {
 				if (n->edges[i] != NULL) {
-					trie_push(st, n->edges[i], 1, (*trie->pos_to_char)(i));
+					if (trie_push(st, n->edges[i], 1, (*trie->pos_to_char)(i)) == NULL) {
+						*err_code = TRIE_NO_MEM;
+					}
 				}
 			}
 		}
@@ -338,7 +398,7 @@ struct trie_node_stack *find_by_prefix_next_trie(struct trie_t *trie, struct tri
 		}
 	}
 	result += sprintf(result, "%s", st->prefix);
-	if ((new_st = find_by_prefix_next_trie_n(st, result, trie)) == NULL) {
+	if ((new_st = find_by_prefix_next_trie_n(st, result, trie, err_code)) == NULL) {
 		free_trie_stack(st);
 	}
 	return new_st;

@@ -1,7 +1,7 @@
 DOXYGEN_CONFIG_PATH = ../doc/Doxyfile
 DOC_DIRS = ../doc/html and ../doc/latex
 BINARY_NAME = yaircd.out
-FILES = clients/client.c clients/client_list.c yaircd.c msg/parsemsg.c msg/sendreply.c msg/interpretmsg.c trie/trie.c
+FILES = clients/client.c clients/client_list.c yaircd.c msg/parsemsg.c msg/msgio.c msg/interpretmsg.c trie/trie.c
 CC = gcc
 CFLAGS = -o $(BINARY_NAME) -Wall
 INCLUDES = -Iinclude

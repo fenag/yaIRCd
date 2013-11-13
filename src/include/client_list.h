@@ -13,9 +13,17 @@
 	@see trie.h
 */
 
+/** Return code for invalid nicks */
+#define CLIENT_LST_INVALID_NICK 1
+
+/** Return code for out of memory error */
+#define CLIENT_LST_NO_MEM 2
+
+/** Return code for attempting to add a client that already exists */
+#define CLIENT_LST_ALREADY_EXISTS 3
 
 /* Documented in client_list.c */
-void client_list_init(void);
+int client_list_init(void);
 void client_list_destroy(void);
 struct irc_client *client_list_find_by_nick(char *nick);
 int client_list_add(struct irc_client *new_client, char *newnick);

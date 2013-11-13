@@ -82,13 +82,21 @@ static int char_to_pos(char s) {
 	return ((((s) >= 'a' && (s) <= 'z') || ((s) >= 'A' && (s) <= 'Z')) ? tolower((unsigned char) (s)) - 'a' : NICK_ALPHABET_SIZE + special_char_id(s));
 }
 
-/** Initializes clients list by creating an empty trie. Initializes `clients_mutex`.
+/** Initializes clients list by creating an empty list. Initializes the necessary structures to control concurrent thread access.
 	The trie will be passed pointers to the functions `is_valid()`, `pos_to_char()`, and `char_to_pos()`. This set of functions defines a valid nickname.
-	@warning This function must be called exactly once, by the master process, before any thread is created and tries to access the list of clients.
+	@return `0` on success; `-1` on failure. `-1` indicates a resources allocation error.
+	@warning This function must be called exactly once, by the parent thread, before any thread is created and tries to access the list of clients.
  */
-void client_list_init(void) {
-	clients = init_trie(NULL, is_valid, pos_to_char, char_to_pos, NICK_EDGES_NO);
-	pthread_mutex_init(&clients_mutex, NULL);
+int client_list_init(void) {
+	if ((clients = init_trie(NULL, is_valid, pos_to_char, char_to_pos, NICK_EDGES_NO)) == NULL) {
+		return -1;
+	}
+	if (pthread_mutex_init(&clients_mutex, NULL) != 0) {
+		destroy_trie(clients, FLAG_NO_FREE_DATA);
+		perror("::client_list.c:client_list_init(): Could not initialize mutex");
+		return -1;
+	}
+	return 0;
 }
 
 /** Destroys a clients list after it is no longer needed. Frees `clients_mutex`.
@@ -96,7 +104,9 @@ void client_list_init(void) {
  */
 void client_list_destroy(void) {
 	destroy_trie(clients, 0);
-	pthread_mutex_destroy(&clients_mutex);
+	if (pthread_mutex_destroy(&clients_mutex) != 0) {
+		perror("::client_list.c:client_lit_destroy(): Could not destroy mutex");
+	}
 }
 
 /** Finds a client by nickname.
@@ -112,21 +122,31 @@ struct irc_client *client_list_find_by_nick(char *nick) {
 	return ret;
 }
 
-/** Adds a client to the clients list. Assumes that there isn't any client with the same nickname as the nick given.
+/** Atomically adds a client to the clients list if there isn't already a client with the same nickname.
+	This operation is thread safe and guaranteed to be free of race conditions. The search and add operations are executed atomically.
 	@param client Pointer to the new client. Cannot be `NULL`.
 	@param newnick Nickname for this client.
-	@return `0` on success; `-1` if this client's nickname contains invalid characters, in which case nothing was added to the list.
-	@warning The caller must check first, by calling `client_list_find_by_nick()`, if there's already a client with the same name.
+	@return <ul>
+				<li>`0` on success</li>
+				<li>`CLIENT_LST_INVALID_NICK` if this client's nickname contains invalid characters, in which case nothing was added to the list
+				<li>`CLIENT_LST_NO_MEM` if there isn't enough memory to create a new client entry</li>
+				<li>`CLIENT_LST_ALREADY_EXISTS` if there's a known client with this nickname</li>
+			</ul>
 	@warning This function does not update `client->nick` to `newnick`.
 	@note `newnick` is assumed to be `client`'s nickname, no matter whatever is stored in `client->nick`. This is to ease the task of adding new clients which may contain invalid characters in their nickname, but
-		  we haven't yet found out.
+		   we haven't yet found out.
 */
 int client_list_add(struct irc_client *client, char *newnick) {
 	int ret;
 	pthread_mutex_lock(&clients_mutex);
-	ret = add_word_trie(clients, newnick, (void *) client);
+	if (find_word_trie(clients, newnick) != NULL) {
+		ret = CLIENT_LST_ALREADY_EXISTS;
+	}
+	else {
+		ret = add_word_trie(clients, newnick, (void *) client);
+	}
 	pthread_mutex_unlock(&clients_mutex);
-	return ret;	
+	return ret == TRIE_INVALID_WORD ? CLIENT_LST_INVALID_NICK : ret == TRIE_NO_MEM ? CLIENT_LST_NO_MEM : ret;	
 }
 
 /** Deletes a client from the clients list. If no such client exists, nothing happens.
@@ -134,6 +154,6 @@ int client_list_add(struct irc_client *client, char *newnick) {
 */
 void client_list_delete(struct irc_client *client) {
 	pthread_mutex_lock(&clients_mutex);
-	delete_word_trie(clients, client->nick);
+	(void) delete_word_trie(clients, client->nick);
 	pthread_mutex_unlock(&clients_mutex);
 }

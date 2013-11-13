@@ -26,7 +26,6 @@
 	@todo See how to daemonize properly. Read http://www-theorie.physik.unizh.ch/~dpotter/howto/daemonize
 	@todo Think about adding configuration file support (.conf)
 	@todo Allow to bind for multiple IPs
-	@todo Add SIGKILL handler to free resources before dying
 */
 
 /** How many clients are allowed to be waiting while the main process is creating a thread for a freshly arrived user. This can be safely incremented to 5 */
@@ -45,19 +44,23 @@ static void connection_cb(EV_P_ ev_io *w, int revents);
 	The threads attributes variable, `thread_attr` is initialized with `PTHREAD_CREATE_DETACHED`, since we won't be joining any thread.
 	The main socket is not polled for new clients; instead, `libev` is used with a watcher that calls `connection_cb` when a new connection request arrives. Default events loop is used.
 	@return `1` on error; `0` otherwise
-	@todo Figure out if `pthread_attr_destroy` and `ev_loop_destroy` should really be in here.
-	@todo Add a SIGKILL handler using `libev`. This is sort of urgent - everytime we stop the daemon, the main socket remains open until the operating system kills it for idling.
-		  It is especially annoying when we want to run the daemon again and it throws an error because the previous socket is still opened.
 	@todo Think about IRCd logging features
 */
 int ircd_boot(void) {
 	int portno = 6667;
-	
-	/* Libev stuff */
+	const int reuse_addr_yes = 1; /* for setsockopt() later */
+	struct sigaction act;
+	/* Libev suff */
 	struct ev_loop *loop;
 	struct ev_io socket_watcher;
 
-	fclose(stdin);
+	/* Disable SIGPIPE - we don't want our server to be killed because of
+	   clients sockets going down unexpectedly
+	 */
+	act.sa_handler = SIG_IGN;
+	sigemptyset(&act.sa_mask);
+	act.sa_flags = 0;
+	sigaction(SIGPIPE, &act, NULL);
 	
 	mainsock_fd = socket(AF_INET, SOCK_STREAM, 0);
 	
@@ -73,6 +76,15 @@ int ircd_boot(void) {
 	/* Store port number in network byte order */
 	serv_addr.sin_port = htons(portno);
 	
+	/* Set SO_REUSEADDR. To learn why, see (read the WHOLE answers!):
+		- http://stackoverflow.com/questions/3229860/what-is-the-meaning-of-so-reuseaddr-setsockopt-option-linux
+		- http://stackoverflow.com/questions/14388706/socket-options-so-reuseaddr-and-so-reuseport-how-do-they-differ-do-they-mean-t
+	 */
+	if (setsockopt(mainsock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_addr_yes, sizeof(int)) == -1) {
+		perror("::yaircd.c:main(): Could not set SO_REUSEADDR in main socket.\nError summary");
+		return 1;
+	}
+	
 	if (bind(mainsock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
 		fprintf(stderr, "::yaircd.c:main(): Could not bind on socket with port %d. Please make sure this port is free, and that the IP you're binding to is valid.\n", portno);
 		perror("Error summary");
@@ -84,33 +96,27 @@ int ircd_boot(void) {
 		close(mainsock_fd);
 		return 1;
 	}
-	clilen = sizeof(cli_addr);
 	
+	/* Initialize data structures */
+	if (client_list_init() == -1) {
+		fprintf(stderr, "::yaircd.c:main(): Unable to initialize clients list.\n");
+		return 1;
+	}
+	clilen = sizeof(cli_addr);
 	/* Initialize thread creation attributes */
 	if (pthread_attr_init(&thread_attr) != 0) {
 		/* On Linux, this will never happen */
 		perror("::yaircd.c:main(): Could not initialize thread attributes");
 		return 1;
 	}
-	
 	/* We want detached threads */
 	pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_DETACHED);
 	/* At this point, we're ready to accept new clients. Set the callback function for new connections */
 	loop = EV_DEFAULT;
 	ev_io_init(&socket_watcher, connection_cb, mainsock_fd, EV_READ);
-	ev_io_start(loop, &socket_watcher);
-	
-	/* Initialize data structures */
-	client_list_init();
-	
+	ev_io_start(loop, &socket_watcher);	
 	/* Now we just have to sit and wait */
-	ev_loop(loop, 0);
-	
-	pthread_attr_destroy(&thread_attr);
-	ev_loop_destroy(loop);
-	close(mainsock_fd);
-	client_list_destroy(); /* This is not supposed to be here */
-	
+	ev_loop(loop, 0);	
 	return 0;
 }
 
@@ -127,7 +133,7 @@ int main(void) {
 	/*}*/
 }
 
-
+void free_thread_arguments(struct irc_client_args_wrapper *args);
 /** Callback function that is called when new clients arrive. It accepts the new connection and wraps the client's information in a dynamically allocated `irc_client_args_wrapper` structure to be passed to
 	`pthread_create()`. Every new client gets a dedicated thread whose starting point is `new_client()`.
 	This function returns prematurely if:
@@ -170,15 +176,32 @@ static void connection_cb(EV_P_ ev_io *w, int revents) {
 		return;
 	}
 	
-	thread_arguments = malloc(sizeof(struct irc_client_args_wrapper));
-	thread_arguments->socket = newsock_fd;
-	thread_arguments->ip_addr = strdup(inet_ntoa(cli_addr.sin_addr));
-	
-	/* thread_arguments will be free()'d inside new_client() */
-	
-	if (pthread_create(&thread_id, &thread_attr, new_client, (void *) thread_arguments) < 0) {
-		perror("::yaircd.c:connection_cb(): could not create new thread");
+	if ((thread_arguments = malloc(sizeof(struct irc_client_args_wrapper))) == NULL) {
+		fprintf(stderr, "::yaircd.c:connection_cb(): Could not allocate wrapper for new thread arguments.\n");
 		close(newsock_fd);
 		return;
 	}
+	if ((thread_arguments->ip_addr = strdup(inet_ntoa(cli_addr.sin_addr))) == NULL) {
+		fprintf(stderr, "::yaircd.c:connection_cb(): Could not allocate wrapper for new thread arguments.\n");
+		free(thread_arguments);
+		close(newsock_fd);
+		return;
+	}
+	
+	thread_arguments->socket = newsock_fd;
+	
+	/* thread_arguments will be freed inside the new thread at the right time */
+	if (pthread_create(&thread_id, &thread_attr, new_client, (void *) thread_arguments) < 0) {
+		perror("::yaircd.c:connection_cb(): could not create new thread");
+		close(newsock_fd);
+		free_thread_arguments(thread_arguments);
+	}
+}
+
+/** This is called by a client thread everytime its arguments structure is not needed anymore.
+	@param args A pointer to the arguments structure that was passed to the thread's initialization function.
+*/
+void free_thread_arguments(struct irc_client_args_wrapper *args) {
+	free(args->ip_addr);
+	free(args);
 }

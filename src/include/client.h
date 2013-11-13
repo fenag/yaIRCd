@@ -22,7 +22,9 @@ struct irc_client {
 	char *nick; /**<nickname */
 	char *username; /**<ident field */
 	char *server; /**<this client's server ip address. `NULL` if it's a local client */
+	char *quit_msg; /**<quit message for this client. This field is only used when the client issues a QUIT command, or when connection to this client is lost for some other reason. */
 	unsigned is_registered : 1; /**<bit field indicating if this client has registered his connection */
+	unsigned uses_ssl : 1; /**<bit field indicating if this client is using a secure connection */
 	int socket_fd; /**<the socket descriptor used to communicate with this client */
 };
 

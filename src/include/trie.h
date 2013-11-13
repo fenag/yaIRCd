@@ -21,6 +21,22 @@
 	Upper caller needs to make the necessary use of mutexes or other synchronization primitives.
 */
 
+/** Return code for invalid words */
+#define TRIE_INVALID_WORD 1
+
+/** Return code for out of memory error */
+#define TRIE_NO_MEM 2
+
+/** Flag that indicates that a node's data is to be freed when it is about to be destroyed. 
+	@see destroy_trie()
+*/
+#define FLAG_FREE_DATA 1
+
+/** Flag that indicates that a node's data shall not be freed when it is about to be destroyed. 
+	@see destroy_trie()
+*/
+#define FLAG_NO_FREE_DATA 0
+
 /** A node in a trie. */
 struct trie_node {
 	char is_word; /**<Indicates if the path from root down to this node denotes a word */
@@ -63,6 +79,6 @@ void destroy_trie(struct trie_t *trie, int free_data);
 int add_word_trie(struct trie_t *trie, char *word, void *data);
 void *delete_word_trie(struct trie_t *trie, char *word);
 void *find_word_trie(struct trie_t *trie, char *word);
-struct trie_node_stack *find_by_prefix_next_trie(struct trie_t *trie, struct trie_node_stack *st, const char *prefix, int depth, char *result);
+struct trie_node_stack *find_by_prefix_next_trie(struct trie_t *trie, struct trie_node_stack *st, const char *prefix, int depth, char *result, int *err_code);
 void free_trie_stack(struct trie_node_stack *st);
 #endif /* TRIE_GUARD */

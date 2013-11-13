@@ -19,7 +19,7 @@
 
 /* Protocol limits */
 /** Max. message size, including terminating \\r\\n, as specified in Section 2.3 */
-#define MAX_MSG_SIZE 512
+#define MAX_MSG_SIZE ((size_t) 512)
 
 /** Max. number of parameters in an IRC message, as specified in Section 2.3 */
 #define MAX_IRC_PARAMS 15
@@ -385,5 +385,11 @@
 /** When replying to an ADMIN message, a server is expected to use replies RLP_ADMINME through to RPL_ADMINEMAIL and provide a text message with each. For RPL_ADMINLOC1 a description of what city, state and country the server is in is expected, followed by details of the university and department (RPL_ADMINLOC2) and finally the administrative contact for the server (an email address here is required) in RPL_ADMINEMAIL.  */
 #define RPL_ADMINEMAIL 259U
 /* End command responses */
+
+/* Quit messages */
+/** Quit message for when a client exits voluntarily with a QUIT command, but no reason is given, or
+	the connection was closed without a QUIT command
+ */
+#define QUIT_NO_REASON "Client exited."
 
 #endif /* __PROTOCOL_SPECS_GUARD__ */
