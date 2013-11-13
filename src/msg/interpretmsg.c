@@ -1,4 +1,5 @@
 #include <string.h>
+#include <pthread.h>
 #include "protocol.h"
 #include "sendreply.h"
 #include "interpretmsg.h"
@@ -28,35 +29,45 @@
 	@param has_prefix `1` if `prefix` points to a valid prefix; `0` otherwise (the message has no prefix).
 	@return `1` If the interpreted command shall result in client disconnection from server (i.e., client issued a QUIT command); `0` otherwise.
 	@note ERR_NICKCOLLISION is not considered here, because no server links exist yet.
-	@todo Implement ERR_NEEDMOREPARAMS and ERR_ALREADYREGISTRED in USER command
-	@todo Add and delete clients from clients list
-	@todo Implement QUIT command
+	@todo Implement QUIT command, and the other commands as well
 */
 int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size, int has_prefix) {
 	if (!client->is_registered) {
 		if (strcasecmp(cmd, ==, "nick")) {
 			if (params_size < 1) {
 				send_err_nonicknamegiven(client);
+				return 0;
 			}
-			else {
-				if (client_list_find_by_nick(params[0]) != NULL) {
-					/* TODO Send ERR_NICKNAMEINUSE */
-				}
-				else if (client_list_add(client, params[0]) == -1) {
-					/* TODO Send ERR_ERRONEUSNICKNAME */
-				}
-				else {
-					client->nick = strdup(params[0]);
-				}
+			if (strlen(params[0]) > MAX_NICK_LENGTH) {
+				send_err_erroneusnickname(client, params[0]);
+				return 0;
+			}
+			switch (client_list_add(client, params[0])) {
+				case CLIENT_LST_INVALID_NICK:
+					send_err_erroneusnickname(client, params[0]);
+					return 0;
+				case CLIENT_LST_NO_MEM:
+					pthread_exit(NULL);
+				case CLIENT_LST_ALREADY_EXISTS:
+					send_err_nicknameinuse(client, params[0]);
+					return 0;
+			}
+			if ((client->nick = strdup(params[0])) == NULL) {
+				/* No memory for this client's nick, sorry! */
+				client_list_delete(client);
+				pthread_exit(NULL);
 			}
 		}
 		else if (strcasecmp(cmd, ==, "user")) {
 			if (params_size < 4) {
 				send_err_needmoreparams(client, cmd);
+				return 0;
 			}
-			else {
-				client->username = strdup(params[0]);
-				client->realname = strdup(params[3]);
+			if ((client->username = strdup(params[0])) == NULL || (client->realname = strdup(params[3])) == NULL) {
+				if (client->nick != NULL) {
+					client_list_delete(client);
+				}
+				pthread_exit(NULL);
 			}
 		}
 		else {
@@ -69,6 +80,11 @@ int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *para
 	}
 	else {
 		/* Interpret message from registered client */
+		if (strcasecmp(cmd, ==, "user")) {
+			send_err_alreadyregistred(client);
+			return 0;
+		}
+		/* ... */
 		return 0;
 	}
 }

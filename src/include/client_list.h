@@ -19,6 +19,9 @@
 /** Return code for out of memory error */
 #define CLIENT_LST_NO_MEM 2
 
+/** Return code for attempting to add a client that already exists */
+#define CLIENT_LST_ALREADY_EXISTS 3
+
 /* Documented in client_list.c */
 int client_list_init(void);
 void client_list_destroy(void);

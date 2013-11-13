@@ -63,3 +63,33 @@ void send_err_needmoreparams(struct irc_client *client, char *cmd) {
 	send_to(client->socket_fd, desc, sizeof(desc)-1, 0);
 }
 
+/** Sends ERR_ERRONEUSNICKNAME to a client who issued a NICK command and chose a nickname that contains invalid characters or exceeds `MAX_NICK_LENGTH`
+	@param client The erratic client to notify
+	@param cmd A pointer to a null terminated characters sequence with the invalid nickname.
+*/
+void send_err_erroneusnickname(struct irc_client *client, char *nick) {
+	char desc[] = " :Erroneus nickname";
+	send_to(client->socket_fd, ERR_ERRONEUSNICKNAME, NUMREPLY_WIDTH, 0);
+	send_to(client->socket_fd, " ", 1, 0);
+	send_to(client->socket_fd, nick, strlen(nick), 0);
+	send_to(client->socket_fd, desc, sizeof(desc)-1, 0);
+}
+
+/** Sends ERR_NICKNAMEINUSE to a client who issued a NICK command and chose a nickname that is already in use.
+	@param client The erratic client to notify
+	@param cmd A pointer to a null terminated characters sequence with the invalid nickname.
+*/
+void send_err_nicknameinuse(struct irc_client *client, char *nick) {
+	char desc[] = " :Nickname is already in use";
+	send_to(client->socket_fd, ERR_NICKNAMEINUSE, NUMREPLY_WIDTH, 0);
+	send_to(client->socket_fd, " ", 1, 0);
+	send_to(client->socket_fd, nick, strlen(nick), 0);
+	send_to(client->socket_fd, desc, sizeof(desc)-1, 0);
+}
+
+void send_err_alreadyregistred(struct irc_client *client) {
+	char desc[] = " :You may not reregister.";
+	send_to(client->socket_fd, ERR_ALREADYREGISTRED, NUMREPLY_WIDTH, 0);
+	send_to(client->socket_fd, desc, sizeof(desc)-1, 0);
+}
+

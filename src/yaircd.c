@@ -26,7 +26,6 @@
 	@todo See how to daemonize properly. Read http://www-theorie.physik.unizh.ch/~dpotter/howto/daemonize
 	@todo Think about adding configuration file support (.conf)
 	@todo Allow to bind for multiple IPs
-	@todo Add SIGKILL handler to free resources before dying
 */
 
 /** How many clients are allowed to be waiting while the main process is creating a thread for a freshly arrived user. This can be safely incremented to 5 */
@@ -45,9 +44,6 @@ static void connection_cb(EV_P_ ev_io *w, int revents);
 	The threads attributes variable, `thread_attr` is initialized with `PTHREAD_CREATE_DETACHED`, since we won't be joining any thread.
 	The main socket is not polled for new clients; instead, `libev` is used with a watcher that calls `connection_cb` when a new connection request arrives. Default events loop is used.
 	@return `1` on error; `0` otherwise
-	@todo Figure out if `pthread_attr_destroy` and `ev_loop_destroy` should really be in here.
-	@todo Add a SIGKILL handler using `libev`. This is sort of urgent - everytime we stop the daemon, the main socket remains open until the operating system kills it for idling.
-		  It is especially annoying when we want to run the daemon again and it throws an error because the previous socket is still opened.
 	@todo Think about IRCd logging features
 */
 int ircd_boot(void) {

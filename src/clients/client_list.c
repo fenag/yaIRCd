@@ -122,22 +122,31 @@ struct irc_client *client_list_find_by_nick(char *nick) {
 	return ret;
 }
 
-/** Adds a client to the clients list. Assumes that there isn't any client with the same nickname as the nick given.
+/** Atomically adds a client to the clients list if there isn't already a client with the same nickname.
+	This operation is thread safe and guaranteed to be free of race conditions. The search and add operations are executed atomically.
 	@param client Pointer to the new client. Cannot be `NULL`.
 	@param newnick Nickname for this client.
-	@return `0` on success; `CLIENT_LST_INVALID_NICK` if this client's nickname contains invalid characters, in which case nothing was added to the list, and `CLIENT_LST_NO_MEM` if there isn't enough memory to create
-			 a new client.
-	@warning The caller must check first, by calling `client_list_find_by_nick()`, if there's already a client with the same name.
+	@return <ul>
+				<li>`0` on success</li>
+				<li>`CLIENT_LST_INVALID_NICK` if this client's nickname contains invalid characters, in which case nothing was added to the list
+				<li>`CLIENT_LST_NO_MEM` if there isn't enough memory to create a new client entry</li>
+				<li>`CLIENT_LST_ALREADY_EXISTS` if there's a known client with this nickname</li>
+			</ul>
 	@warning This function does not update `client->nick` to `newnick`.
 	@note `newnick` is assumed to be `client`'s nickname, no matter whatever is stored in `client->nick`. This is to ease the task of adding new clients which may contain invalid characters in their nickname, but
-		  we haven't yet found out.
+		   we haven't yet found out.
 */
 int client_list_add(struct irc_client *client, char *newnick) {
 	int ret;
 	pthread_mutex_lock(&clients_mutex);
-	ret = add_word_trie(clients, newnick, (void *) client);
+	if (client_list_find_by_nick(newnick) != NULL) {
+		ret = CLIENT_LST_ALREADY_EXISTS;
+	}
+	else {
+		ret = add_word_trie(clients, newnick, (void *) client);
+	}
 	pthread_mutex_unlock(&clients_mutex);
-	return ret == TRIE_INVALID_WORD ? CLIENT_LST_INVALID_NICK : ret == TRIE_NO_MEM ? CLIENT_LST_NO_MEM : 0;	
+	return ret == TRIE_INVALID_WORD ? CLIENT_LST_INVALID_NICK : ret == TRIE_NO_MEM ? CLIENT_LST_NO_MEM : ret;	
 }
 
 /** Deletes a client from the clients list. If no such client exists, nothing happens.
