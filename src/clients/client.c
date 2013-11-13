@@ -27,18 +27,6 @@
 	@todo Implement IRC commands :)
 */
 
-/** This is the function that gets called by `new_client()` to create a new client instance. It allocs memory for a new `irc_client` instance and initializes the `hostname`, `socket_fd`, `ev_loop` and `ev_watcher` fields.
-	`ev_loop` is a regular loop created with `ev_loop_new(0)`.
-	`ev_watcher` is initialized with `manage_client_messages()` as a callback function.
-	Note that, as a consequence, every client's thread will hold a loop of its own to manage this client's network I/O.
-	After initializing the new user, it begins execution of the events loop. Thus, this function will not return until the loop is broken, which is done by `manage_client_messages()`. When that happens, the loop is
-	destroyed, and every resource that was alloced for this client is `free()`'d.
-	@param ip_addr A characters sequence describing the client's IP address. IPv4 only.
-	@param socket socket file descriptor for the new client.
-	@return `0` if no resources are available to register this client;
-			`1` if everything worked smoothly
-*/
-
 static void manage_client_messages(EV_P_ ev_io *watcher, int revents);
 void destroy_client(void *arg);
 static void free_client(struct irc_client *client);
