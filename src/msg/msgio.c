@@ -153,3 +153,35 @@ void send_err_alreadyregistred(struct irc_client *client) {
 	write_to(client, desc, sizeof(desc)-1);
 }
 
+/** Sends MOTD to a client.
+	@param client The client to send MOTD to.
+	@todo Make this configurable, including the server name.
+*/
+void send_motd(struct irc_client *client) {
+	char begin[] = " :- development.yaircd.org Message of the day - ";
+	char during[] = " :- ";
+	char end[] = " :End of /MOTD command";
+	/* TEMP - make this configurable */
+	int i;
+	char *motd[] = {
+		"Hello, welcome to this IRC server.",
+		"This is an experimental server with very few features implemented.",
+		"Only PRIVMSG is allowed at the moment, sorry!",
+		"A team of highly trained monkeys has been dispatched to deal with this unpleasant situation.",
+		"For now, there's really nothing you can do besides guessing who's online and PRIVMSG'ing them",
+		"Good luck! :P"
+	};
+	
+	write_to(client, RPL_MOTDSTART, NUMREPLY_WIDTH);
+	write_to(client, begin, sizeof(begin)-1);
+	
+	for (i = 0; i < sizeof(motd)/sizeof(motd[0]); i++) {
+		write_to(client, RPL_MOTD, NUMREPLY_WIDTH);
+		write_to(client, during, sizeof(during)-1);
+		write_to(client, motd[i], strlen(motd[i]));
+	}
+	
+	write_to(client, RPL_ENDOFMOTD, NUMREPLY_WIDTH);
+	write_to(client, end, sizeof(end)-1);
+}
+

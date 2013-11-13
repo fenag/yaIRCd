@@ -75,6 +75,7 @@ int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *para
 		}
 		if (client->nick != NULL && client->username != NULL && client->realname != NULL) {
 			client->is_registered = 1;
+			send_motd(client);
 		}
 		return 0;
 	}
@@ -92,6 +93,9 @@ int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *para
 				client->quit_msg = strdup(params[0]);
 			}
 			pthread_exit(NULL); /* calls destroy_client() */
+		}
+		if (strcasecmp(cmd, ==, "privmsg")) {
+			/* ... */
 		}
 		/* ... */
 		return 0;
