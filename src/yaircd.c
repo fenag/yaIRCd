@@ -48,6 +48,7 @@ static void connection_cb(EV_P_ ev_io *w, int revents);
 */
 int ircd_boot(void) {
 	int portno = 6667;
+	const int reuse_addr_yes = 1; /* for setsockopt() later */
 	struct sigaction act;
 	/* Libev suff */
 	struct ev_loop *loop;
@@ -74,6 +75,15 @@ int ircd_boot(void) {
 	
 	/* Store port number in network byte order */
 	serv_addr.sin_port = htons(portno);
+	
+	/* Set SO_REUSEADDR. To learn why, see (read the WHOLE answers!):
+		- http://stackoverflow.com/questions/3229860/what-is-the-meaning-of-so-reuseaddr-setsockopt-option-linux
+		- http://stackoverflow.com/questions/14388706/socket-options-so-reuseaddr-and-so-reuseport-how-do-they-differ-do-they-mean-t
+	 */
+	if (setsockopt(mainsock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_addr_yes, sizeof(int)) == -1) {
+		perror("::yaircd.c:main(): Could not set SO_REUSEADDR in main socket.\nError summary");
+		return 1;
+	}
 	
 	if (bind(mainsock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
 		fprintf(stderr, "::yaircd.c:main(): Could not bind on socket with port %d. Please make sure this port is free, and that the IP you're binding to is valid.\n", portno);
