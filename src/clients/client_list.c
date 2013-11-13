@@ -139,7 +139,7 @@ struct irc_client *client_list_find_by_nick(char *nick) {
 int client_list_add(struct irc_client *client, char *newnick) {
 	int ret;
 	pthread_mutex_lock(&clients_mutex);
-	if (client_list_find_by_nick(newnick) != NULL) {
+	if (find_word_trie(clients, newnick) != NULL) {
 		ret = CLIENT_LST_ALREADY_EXISTS;
 	}
 	else {

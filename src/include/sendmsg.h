@@ -7,7 +7,7 @@
 	
 	@author Filipe Goncalves
 	@date November 2013
-	@see sendreply.c
+	@see sendmsg.c
 */
 
 /* Functions documented in the source file */

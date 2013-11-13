@@ -1,7 +1,10 @@
 #include <unistd.h>
 #include <string.h>
+#include <pthread.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include "protocol.h"
-#include "sendreply.h"
+#include "sendmsg.h"
 #include "wrappers.h"
 
 /** @file
@@ -11,13 +14,34 @@
 	@date November 2013
 */
 
+/** This function knows how to write to a client. It is an abstraction used by every function that wants to write to a client socket.
+	It knows how to deal with plaintext sockets and SSL sockets. No other function in the whole ircd should worry about this.
+	@param client The client to notify.
+	@param buf A characters sequence, possibly not null-terminated, that shall be written to this client's socket.
+	@param len How many characters from `buf` are to be written into this client's socket.
+	@note On success, exactly `len` characters will be written to `client`'s socket. On failure, `pthread_exit()` is called, since we apparently lost connection to this client.
+*/
+inline void write_to(struct irc_client *client, char *buf, size_t len) {
+	if (!client->uses_ssl) {
+		if (send(client->socket_fd, buf, len, 0) == -1) {
+			/* Humm... something went wrong with this socket.
+			   The client's process most likely terminated abruptly
+			 */
+			pthread_exit(NULL);
+		}
+	}
+	else {
+		/* Write to SSL socket... */
+	}
+}
+
 /** Sends ERR_NOTREGISTERED to a client who tried to use any command other than NICK, PASS or USER before registering.
 	@param client The erratic client to notify
 */
 void send_err_notregistered(struct irc_client *client) {
 	char desc[] = " :You have not registered";
-	send_to(client->socket_fd, ERR_NOTREGISTERED, NUMREPLY_WIDTH, 0);
-	send_to(client->socket_fd, desc, sizeof(desc)-1, 0);
+	write_to(client, ERR_NOTREGISTERED, NUMREPLY_WIDTH);
+	write_to(client, desc, sizeof(desc)-1);
 }
 
 /** Sends ERR_UNKNOWNCOMMAND to a client who seems to be messing around with commands.
@@ -30,15 +54,15 @@ void send_err_notregistered(struct irc_client *client) {
 void send_err_unknowncommand(struct irc_client *client, char *cmd) {
 	char desc[] = " :Unknown command";
 	char emptycmd[] = " NULL_CMD";
-	send_to(client->socket_fd, ERR_UNKNOWNCOMMAND, NUMREPLY_WIDTH, 0);
+	write_to(client, ERR_UNKNOWNCOMMAND, NUMREPLY_WIDTH);
 	if (*cmd != '\0') {
-		send_to(client->socket_fd, " ", (size_t) 1, 0);
-		send_to(client->socket_fd, cmd, strlen(cmd), 0);
+		write_to(client, " ", (size_t) 1);
+		write_to(client, cmd, strlen(cmd));
 	}
 	else {
-		send_to(client->socket_fd, emptycmd, sizeof(emptycmd)-1, 0);
+		write_to(client, emptycmd, sizeof(emptycmd)-1);
 	}
-	send_to(client->socket_fd, desc, sizeof(desc)-1, 0);
+	write_to(client, desc, sizeof(desc)-1);
 }
 
 /** Sends ERR_NONICKNAMEGIVEN to a client who issued a NICK command but didn't provide a nick
@@ -46,8 +70,8 @@ void send_err_unknowncommand(struct irc_client *client, char *cmd) {
 */
 void send_err_nonicknamegiven(struct irc_client *client) {
 	char desc[] = " :No nickname given";
-	send_to(client->socket_fd, ERR_NONICKNAMEGIVEN, NUMREPLY_WIDTH, 0);
-	send_to(client->socket_fd, desc, sizeof(desc)-1, 0);
+	write_to(client, ERR_NONICKNAMEGIVEN, NUMREPLY_WIDTH);
+	write_to(client, desc, sizeof(desc)-1);
 }
 
 /** Sends ERR_NEEDMOREPARAMS to a client who issued a command but didn't provide enough parameters for his request to be fulfilled
@@ -57,39 +81,42 @@ void send_err_nonicknamegiven(struct irc_client *client) {
 */
 void send_err_needmoreparams(struct irc_client *client, char *cmd) {
 	char desc[] = " :Not enough parameters";
-	send_to(client->socket_fd, ERR_NEEDMOREPARAMS, NUMREPLY_WIDTH, 0);
-	send_to(client->socket_fd, " ", 1, 0);
-	send_to(client->socket_fd, cmd, strlen(cmd), 0);
-	send_to(client->socket_fd, desc, sizeof(desc)-1, 0);
+	write_to(client, ERR_NEEDMOREPARAMS, NUMREPLY_WIDTH);
+	write_to(client, " ", 1);
+	write_to(client, cmd, strlen(cmd));
+	write_to(client, desc, sizeof(desc)-1);
 }
 
 /** Sends ERR_ERRONEUSNICKNAME to a client who issued a NICK command and chose a nickname that contains invalid characters or exceeds `MAX_NICK_LENGTH`
 	@param client The erratic client to notify
-	@param cmd A pointer to a null terminated characters sequence with the invalid nickname.
+	@param nick A pointer to a null terminated characters sequence with the invalid nickname.
 */
 void send_err_erroneusnickname(struct irc_client *client, char *nick) {
 	char desc[] = " :Erroneus nickname";
-	send_to(client->socket_fd, ERR_ERRONEUSNICKNAME, NUMREPLY_WIDTH, 0);
-	send_to(client->socket_fd, " ", 1, 0);
-	send_to(client->socket_fd, nick, strlen(nick), 0);
-	send_to(client->socket_fd, desc, sizeof(desc)-1, 0);
+	write_to(client, ERR_ERRONEUSNICKNAME, NUMREPLY_WIDTH);
+	write_to(client, " ", 1);
+	write_to(client, nick, strlen(nick));
+	write_to(client, desc, sizeof(desc)-1);
 }
 
 /** Sends ERR_NICKNAMEINUSE to a client who issued a NICK command and chose a nickname that is already in use.
 	@param client The erratic client to notify
-	@param cmd A pointer to a null terminated characters sequence with the invalid nickname.
+	@param nick A pointer to a null terminated characters sequence with the invalid nickname.
 */
 void send_err_nicknameinuse(struct irc_client *client, char *nick) {
 	char desc[] = " :Nickname is already in use";
-	send_to(client->socket_fd, ERR_NICKNAMEINUSE, NUMREPLY_WIDTH, 0);
-	send_to(client->socket_fd, " ", 1, 0);
-	send_to(client->socket_fd, nick, strlen(nick), 0);
-	send_to(client->socket_fd, desc, sizeof(desc)-1, 0);
+	write_to(client, ERR_NICKNAMEINUSE, NUMREPLY_WIDTH);
+	write_to(client, " ", 1);
+	write_to(client, nick, strlen(nick));
+	write_to(client, desc, sizeof(desc)-1);
 }
 
+/** Sends ERR_ALREADYREGISTRED to a client who issued a USER command even though he was already registred.
+	@param client The erratic client to notify
+*/
 void send_err_alreadyregistred(struct irc_client *client) {
 	char desc[] = " :You may not reregister.";
-	send_to(client->socket_fd, ERR_ALREADYREGISTRED, NUMREPLY_WIDTH, 0);
-	send_to(client->socket_fd, desc, sizeof(desc)-1, 0);
+	write_to(client, ERR_ALREADYREGISTRED, NUMREPLY_WIDTH);
+	write_to(client, desc, sizeof(desc)-1);
 }
 

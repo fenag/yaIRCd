@@ -23,6 +23,7 @@ struct irc_client {
 	char *username; /**<ident field */
 	char *server; /**<this client's server ip address. `NULL` if it's a local client */
 	unsigned is_registered : 1; /**<bit field indicating if this client has registered his connection */
+	unsigned uses_ssl : 1; /**<bit field indicating if this client is using a secure connection */
 	int socket_fd; /**<the socket descriptor used to communicate with this client */
 };
 

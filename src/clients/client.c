@@ -11,7 +11,7 @@
 #include "protocol.h"
 #include "wrappers.h"
 #include "parsemsg.h"
-#include "sendreply.h"
+#include "sendmsg.h"
 #include "interpretmsg.h"
 
 /** @file
@@ -161,6 +161,7 @@ static struct irc_client *create_client(char *ip_addr, int socket) {
 	new_client->socket_fd = socket;
 	new_client->server = NULL; /* local client */
 	new_client->is_registered = 0;
+	new_client->uses_ssl = 0;
 	new_client->realname = NULL;
 	new_client->nick = NULL;
 	new_client->username = NULL;

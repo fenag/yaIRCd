@@ -1,7 +1,5 @@
 #ifndef __YAIRCD_F_WRAPPERS__
 #define __YAIRCD_F_WRAPPERS__
-#include <sys/types.h>
-#include <sys/socket.h>
 
 /** @file
 	@brief yaIRCd function wrappers
@@ -25,8 +23,5 @@
 
 /** As described for `strcmp` macro, make `strcasecmp` equally intuitive */
 #define strcasecmp(a,R,b) (strcasecmp(a,b) R 0)
-
-/** Avoid `SIGPIPE` to arise in `send()` calls */
-#define send_to(s,b,l,f) send(s, b, l, (f) | MSG_NOSIGNAL)
 
 #endif /* __YAIRCD_F_WRAPPERS__ */
