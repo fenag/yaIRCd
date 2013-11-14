@@ -90,7 +90,7 @@ int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *para
 				/* We don't check for strdup returning NULL: if it happens, it's not
 				   a big deal - he will just quit with the default message.
 				 */
-				client->quit_msg = strdup(params[0]);
+				/*client->quit_msg = strdup(params[0]);*/
 			}
 			pthread_exit(NULL); /* calls destroy_client() */
 		}

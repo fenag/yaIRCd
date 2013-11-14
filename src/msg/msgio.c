@@ -40,15 +40,15 @@ inline void write_to(struct irc_client *client, char *buf, size_t len) {
 	@param client The client to read from.
 	@param buf Buffer to store the message read.
 	@param len Maximum length of the message. This is usually bounded by the size of `buf`. This parameter avoids buffer overflow.
-	@return A positive (`>= 0`) integer denoting the number of characters read and stored in `buf`.
+	@return A positive (`> 0`) integer denoting the number of characters read and stored in `buf`.
 	@warning `buf` is not null terminated. The caller must use the return value to know where `buf`'s contents end. Typically, the caller will pass a buffer
 			  with enough space for `j` characters, but will pass a value for `len` equal to `j-1`. This will bound the number of written characters, `i`, to `j-1`, so that
 			  the string can then be null terminated with `buf[i] = &lsquo;\\0&rsquo;`.
 	@note If there is a fatal error with this socket, or if the connection from the client side was shut down, this function will call `pthread_exit()`. As a consequence, the returned value is always
 		  a positive integer.
 */
-inline int read_from(struct irc_client *client, char *buf, size_t len) {
-	int msg_size;
+inline ssize_t read_from(struct irc_client *client, char *buf, size_t len) {
+	ssize_t msg_size;
 	if (!client->uses_ssl) {
 		msg_size = recv(client->socket_fd, buf, len, 0);
 		if (msg_size == 0) {
@@ -64,7 +64,7 @@ inline int read_from(struct irc_client *client, char *buf, size_t len) {
 	}
 	else {
 		/* Read from SSL socket... */
-		return 0;
+		return (ssize_t) 0;
 	}
 }
 

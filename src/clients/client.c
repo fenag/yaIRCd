@@ -93,15 +93,9 @@ void *new_client(void *args) {
 	@todo Notify other clients when a client disconnects abruptly
 */
 static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
-	char msg_in[MAX_MSG_SIZE+1];
-	ssize_t msg_size;
 	struct irc_client *client;
-	/* Stuff needed to parse message */
-	int params_no;
-	int parse_res;
-	char *prefix;
-	char *cmd;
-	char *params[MAX_IRC_PARAMS];
+	char *msg_in;
+	int msg_size;
 	
     if (revents & EV_ERROR) {
         fprintf(stderr, "::client.c:manage_client_messages(): unexpected EV_ERROR on client event watcher\n");
@@ -112,25 +106,32 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 		return;
 	}
 	client = (struct irc_client *) watcher;
-	msg_size = read_from(client, msg_in, MAX_MSG_SIZE);
-	/* assert: msg_size > 0 && msg_size <= MAX_MSG_SIZE
-	   It is safe to write to msg_in[msg_size] since we have space for MAX_MSG_SIZE+1 chars
-	*/
-	msg_in[msg_size] = '\0'; /* Ensures the message is null-terminated, as required by parsemsg() */
+	
+	read_data(client);
+	
+	while ((msg_size = next_msg(client->last_msg, &msg_in)) != MSG_CONTINUE) {
+		if (msg_size == MSG_FINISH_ERR) {
+			send_err_unknowncommand(client, "");
+			continue;
+		}
+		/* parsemsg.c says it is safe to write to msg_in[msg_size-2] since msg_in will hold a message with at least the terminating sequence \r\n */
+		msg_in[msg_size-2] = '\0';
+	}
+	/*
 	parse_res = parse_msg(msg_in, msg_size, &prefix, &cmd, params, &params_no);
 	if (parse_res == -1) {
 		if (!client->is_registered) {
-			/* RFC Section 4.1: until the connection is registered, the server must respond to any non-registration commands with ERR_NOTREGISTERED */
+			/* RFC Section 4.1: until the connection is registered, the server must respond to any non-registration commands with ERR_NOTREGISTERED 
 			send_err_notregistered(client);
 		}
 		else {
-			send_err_unknowncommand(client, ""); /* Send empty command, since it is not safe to use cmd, because -1 was returned */
+			send_err_unknowncommand(client, ""); /* Send empty command, since it is not safe to use cmd, because -1 was returned 
 		}
 	}
 	else if (interpret_msg(client, prefix, cmd, params, params_no, parse_res) == 1) {
-		/* Disconnect client */
+		/* Disconnect client 
 		
-	}
+	}*/
 }
 
 /** Creates a new client instance that will be used throughout this client's lifetime.
@@ -148,6 +149,11 @@ static struct irc_client *create_client(char *ip_addr, int socket) {
 		free(new_client);
 		return NULL;
 	}
+	if ((new_client->last_msg = malloc(sizeof(struct irc_message))) == NULL) {
+		ev_loop_destroy(new_client->ev_loop);
+		free(new_client);
+		return NULL;
+	}
 	new_client->hostname = ip_addr;
 	new_client->socket_fd = socket;
 	new_client->server = NULL; /* local client */
@@ -156,7 +162,7 @@ static struct irc_client *create_client(char *ip_addr, int socket) {
 	new_client->realname = NULL;
 	new_client->nick = NULL;
 	new_client->username = NULL;
-	new_client->quit_msg = NULL;
+	initialize_irc_message(new_client->last_msg);
 	return new_client;
 }
 
@@ -187,10 +193,7 @@ void destroy_client(void *arg) {
 	if (client->is_registered) {
 		client_list_delete(client);
 	}
-	/* TODO Notify other clients on the same channel that this client is leaving 
-	   client->quit_msg will hold a fresh copy of this client's quit message.
-	   It can be NULL; in that case, QUIT_NO_REASON (from protocol.h) shall be used.
-	*/
+	/* TODO Notify other clients on the same channel that this client is leaving */
 	free_client(client);
 }
 
@@ -209,7 +212,6 @@ static void free_client(struct irc_client *client) {
 	free(client->nick);
 	free(client->username);
 	free(client->server);
-	free(client->quit_msg);
 	close(client->socket_fd);
 	ev_io_stop(client->ev_loop, &client->ev_watcher); /* Stop the callback mechanism */
 	ev_break(client->ev_loop, EVBREAK_ONE); /* Stop iterating */

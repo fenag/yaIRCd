@@ -1,6 +1,9 @@
 #include <ctype.h>
+#include <sys/types.h>
+#include <stdio.h>
 #include "protocol.h"
 #include "parsemsg.h"
+#include "msgio.h"
 
 /** @file
 	@brief IRC Messages parser implementation
@@ -163,6 +166,101 @@ int parse_msg(char *buf, int size, char **prefix, char **cmd, char *params[MAX_I
 	return ret;
 }
 
+/** Initializes a `struct irc_message`, typically from a client.
+	@param in The structure to initialize.
+*/
+void initialize_irc_message(struct irc_message *in) {
+	in->status = 0;
+	in->index = 0;
+	in->last_stop = 0;
+	in->msg_begin = 0;
+};
+
+/** Copies every characters from `buf[0..length-1] to `to`. Assumes `to` has enough space, which is safe because this function is only used inside this file
+	as an auxiliary function from `next_msg()`.
+	@param to Pointer to the beginning of the target buffer.
+	@param buf Pointer to the buffer being copied.
+	@param length How many characters to copy from `buf`.
+	@note `to` and `buf` may overlap in memory, and in fact that is the case. `next_msg()` uses this function to bring a message to the front of the queue.
+*/
+static void bring_to_top(char *to, char *buf, int length) {
+	if (buf == to) {
+		return;
+	}
+	for (; length-- > 0; *to++ = *buf++)
+		; /* Intentionally left blank */
+}
+
+/** Called everytime there is new data to read from the socket. After calling this function, it is advised to use `next_msg()` to retrieve the IRC messages that can be extracted from this read,
+	otherwise, the caller risks losing space in the messages buffer.
+	@param client The client that transmitted new data.
+	@note This function never overflows. If it is called repeatedly without calling `next_msg()`, it will eventually run out of space and throw away everything read, emptying the buffer.
+	@note This function only eads what it can. This means that, for example, there may be 256 characters available to read from the socket, but if there's only space to read 28, only 28 are read.
+	This is generally the case when IRC messages were fragmented and we are waiting for the rest of some message, which means our buffer is not empty.
+	The function shall be called again if it is known that there is more data in the socket to parse, but only after calling `next_msg()` to free some space in the buffer.
+*/
+void read_data(struct irc_client *client) {
+	struct irc_message *client_msg = client->last_msg;
+	char *buf = client_msg->msg+client_msg->index;
+	if (sizeof(client_msg->msg) <= client_msg->index) {
+		/* If we get here, it means we have read a characters sequence of at least MAX_MSG_SIZE length without finding
+		   the message terminators \r\n. A lame client is messing around with the server. Reset the message buffer and log
+		   this malicious behavior.
+		 */
+		fprintf(stderr, "Parse error: message exceeds maximum allowed length. Received by %s\n", client->nick == NULL ? "<unregistered>" : client->nick);
+		initialize_irc_message(client_msg);
+	}
+	client_msg->index += read_from(client, buf, sizeof(client_msg->msg)-client_msg->index);
+}
+
+/** Analyzes the incoming messages buffer and the information read from the socket to determine if there's any IRC message that can be retrieved from the buffer at the moment.
+	@param client_msg The structure representing state information for the sockets reading performed earlier.
+	@param msg If a new message is available, `*msg` will point to the beginning of a characters sequence that holds an IRC message terminated with \\r\\n.
+	@return This function returns a negative constant if no new message is available. Possible values for this constant are:
+			<ul>
+				<li>`MSG_CONTINUE` - this means that, at the moment, it is not possible to retrieve a complete IRC message, and that the caller shall wait until there is more incoming data in the socket</li>
+				<li>`MSG_FINISH_ERR` - a message that can't possibly be well formed has been detected. This often happens when more than `MAX_MSG_SIZE` characters have been read without a terminating sequence.</li>
+			</ul>
+			In case of success, the the length of a new IRC message is returned, and `*msg` will point to the beginning of the message. Any access in `(*msg)[0..length-1]` is valid. On success, `length` is guaranteed
+			to be greater than or equal to 2, since an IRC message is terminated by \\r\\n. Thus, it is safe for the upper caller to null-terminate an IRC message by executing `(*msg)[length-2] = &lsquo;\\0&rsquo;`.
+	@warning No space allocation takes place, only pointer manipulation.
+	@warning Always check for the return codes for this function before using `*msg`. Its contents are undefined when the return value is not a positive integer.
+*/
+int next_msg(struct irc_message *client_msg, char **msg) {
+	int i;
+	int len;
+	char *buf = client_msg->msg;
+	for (i = client_msg->last_stop; client_msg->status != (STATUS_SEEN_CR | STATUS_SEEN_LF) && i < client_msg->index; i++) {
+		if (buf[i] == '\r') {
+			client_msg->status |= STATUS_SEEN_CR;
+		}
+		else if (buf[i] == '\n') {
+			client_msg->status |= STATUS_SEEN_LF;
+		}
+	}
+	/* assert: i == client_msg->index || client_msg->status == (STATUS_SEEN_CR | STATUS_SEEN_LF) */
+	if (client_msg->status == (STATUS_SEEN_CR | STATUS_SEEN_LF)) {
+		/* assert: (buf[i-1] == '\r' || buf[i-1] == '\n') && i-1 < client_msg->index */
+		client_msg->status = 0;
+		len = i - client_msg->msg_begin;
+		*msg = client_msg->msg+client_msg->msg_begin;
+		client_msg->last_stop = i;
+		client_msg->msg_begin = i;
+		if (len >= 2 && buf[i-1] == '\n' && buf[i-2] == '\r') {
+			return len;
+		} else {
+			initialize_irc_message(client_msg);
+			return MSG_FINISH_ERR;
+		}
+	}
+	else {
+		/* assert: i == client_msg->index  && client_msg->status != (STATUS_SEEN_CR | STATUS_SEEN_LF) */
+		bring_to_top(client_msg->msg, client_msg->msg+client_msg->msg_begin, client_msg->index -= client_msg->msg_begin);
+		client_msg->last_stop = client_msg->index;
+		client_msg->msg_begin = 0;
+		return MSG_CONTINUE;
+	}
+}
 
 /* Debug */
 /*
