@@ -163,6 +163,18 @@
 /* End error replies */
 
 /* Command responses */
+/** The server sends Replies 001 to 004 to a user upon successful registration. */
+#define RPL_WELCOME "001"
+
+/** The server sends Replies 001 to 004 to a user upon successful registration. */
+#define RPL_YOURHOST "002"
+
+/** The server sends Replies 001 to 004 to a user upon successful registration. */
+#define RPL_CREATED "003"
+
+/** The server sends Replies 001 to 004 to a user upon successful registration. */
+#define RPL_MYINFO "004"
+
 /** Dummy reply number. Not used. */
 #define RPL_NONE "300"
 

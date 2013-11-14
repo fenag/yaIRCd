@@ -74,6 +74,7 @@ int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *para
 		}
 		if (client->nick != NULL && client->username != NULL && client->realname != NULL) {
 			client->is_registered = 1;
+			send_welcome(client);
 			send_motd(client);
 		}
 		return 0;

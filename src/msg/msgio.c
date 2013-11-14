@@ -186,3 +186,30 @@ void send_motd(struct irc_client *client) {
 	write_to(client, end, sizeof(end)-1);
 }
 
+/** Sends the welcome message to a newly registred user
+	@param client The client to greet.
+	@todo Make this correct to present settings properly
+*/
+void send_welcome(struct irc_client *client) {
+	char welcome[] = " :Welcome to the Internet Relay Network teste!test@localhost";
+	char host[] = " :Your host is ME, running version 1";
+	char created[] = " :This server was created now";
+	char myinfo[] = " :development.yaircd.org 1 ui mo";
+	
+	write_to(client, RPL_WELCOME, NUMREPLY_WIDTH);
+	write_to(client, welcome, sizeof(welcome)-1);
+	write_to(client, "\r\n", 2);
+	
+	write_to(client, RPL_YOURHOST, NUMREPLY_WIDTH);
+	write_to(client, host, sizeof(host)-1);
+	write_to(client, "\r\n", 2);
+	
+	write_to(client, RPL_CREATED, NUMREPLY_WIDTH);
+	write_to(client, created, sizeof(created)-1);
+	write_to(client, "\r\n", 2);
+	
+	write_to(client, RPL_MYINFO, NUMREPLY_WIDTH);
+	write_to(client, myinfo, sizeof(myinfo)-1);
+	write_to(client, "\r\n", 2);
+}
+

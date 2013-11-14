@@ -121,6 +121,7 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 		}
 		/* parsemsg.c says it is safe to write to msg_in[msg_size-2] since msg_in will hold a message with at least the terminating sequence \r\n */
 		msg_in[msg_size-2] = '\0';
+		printf("Received msg: %s\n", msg_in);
 		parse_res = parse_msg(msg_in, &prefix, &cmd, params, &params_no);
 		if (parse_res == -1) {
 			send_err_unknowncommand(client, "");
@@ -162,6 +163,7 @@ static struct irc_client *create_client(char *ip_addr, int socket) {
 	new_client->nick = NULL;
 	new_client->username = NULL;
 	initialize_irc_message(new_client->last_msg);
+	printf("new client.\n");
 	return new_client;
 }
 
