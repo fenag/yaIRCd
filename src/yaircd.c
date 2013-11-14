@@ -126,7 +126,7 @@ void shutSSL(){
 	@todo Think about IRCd logging features
 */
 int ircd_boot(void) {
-	int portno = 6666;
+	int portno = 6667;
 	int portssl = 6668; /* ssl port*/
 	const int reuse_addr_yes = 1; /* for setsockopt() later */
 	struct sigaction act;
