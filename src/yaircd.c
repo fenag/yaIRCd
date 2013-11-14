@@ -39,8 +39,8 @@
 /** How many clients are allowed to be waiting while the main process is creating a thread for a freshly arrived user. This can be safely incremented to 5 */
 #define SOCK_MAX_HANGUP_CLIENTS 5
 
-static int mainsock_fd; /**<Main socket file descriptor, where new connection request arrive */
-static int sslsock_fd;
+static int mainsock_fd; /**<Main socket file descriptor, where new insecure connection request arrive */
+static int sslsock_fd; /**<SSL socket file descriptor, where new secure connection request arrive */
 static struct sockaddr_in serv_addr; /**<This node's address, namely, the IP and port where we will be listening for new connections. */
 static struct sockaddr_in ssl_addr;
 static struct sockaddr_in cli_addr; /**<The client address structure that will hold information for new connected users. */
@@ -376,10 +376,10 @@ static void ssl_connection_cb(EV_P_ ev_io *w, int revents) {
 	@param args A pointer to the arguments structure that was passed to the thread's initialization function.
 */
 void free_thread_arguments(struct irc_client_args_wrapper *args) {
-	if(!args->ssl){
-		SSL_shutdown(args->ssl);
-		SSL_free(args->ssl);
-	}
+	//if(args->ssl){
+		//SSL_shutdown(args->ssl);
+		//SSL_free(args->ssl);
+	//}
 	free(args->ip_addr);
 	free(args);
 }

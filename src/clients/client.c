@@ -201,6 +201,7 @@ void destroy_client(void *arg) {
 	It frees every dynamic allocated resource, closes the socket, stops the callback mechanism by detaching the watcher from the events loop, and destroys this client's
 	ev_loop.
 	@param client The client to free
+	@todo find the way to free client->ssl
 */
 static void free_client(struct irc_client *client) {
 	/* Some fields, such as client->realname, can be NULL if the client is not registered.
@@ -213,6 +214,10 @@ static void free_client(struct irc_client *client) {
 	free(client->username);
 	free(client->server);
 	free(client->quit_msg);
+	//if(client->ssl == NULL){
+		//SSL_shutdown(client->ssl);
+		//SSL_free(client->ssl);
+	//}
 	close(client->socket_fd);
 	ev_io_stop(client->ev_loop, &client->ev_watcher); /* Stop the callback mechanism */
 	ev_break(client->ev_loop, EVBREAK_ONE); /* Stop iterating */
