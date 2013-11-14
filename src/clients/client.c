@@ -21,16 +21,15 @@
 	Every operation to be performed in an `irc_client` shall be invoked through a function defined in this file.
 	
 	@author Filipe Goncalves
+	@author Fabio Ribeiro
 	@date November 2013
 	@todo Implement timeouts
-	@todo Move client message exchanching routines to another file
-	@todo Implement IRC commands :)
 */
 
 static void manage_client_messages(EV_P_ ev_io *watcher, int revents);
 void destroy_client(void *arg);
 static void free_client(struct irc_client *client);
-static struct irc_client *create_client(char *ip_addr, int socket);
+static struct irc_client *create_client(char *ip_addr, int socket, SSL *ssl);
 void free_thread_arguments(struct irc_client_args_wrapper *);
 
 /** Accepts a new client's connection. This function is indirectly called by the threads scheduler. When a new client pops in, the main process allocates a new thread whose init function is this one.
@@ -49,12 +48,15 @@ void *new_client(void *args) {
 	struct irc_client *client;
 	int sockfd;
 	char *ip;
+	SSL *ssl;
 	
 	sockfd = arguments->socket;
 	ip = strdup(arguments->ip_addr);
+	ssl = arguments->ssl;
+	
 	free_thread_arguments(arguments);
 	
-	if (ip == NULL || (client = create_client(ip, sockfd)) == NULL) {
+	if (ip == NULL || (client = create_client(ip, sockfd, ssl)) == NULL) {
 		close(sockfd);
 		return NULL;
 	}
@@ -144,7 +146,7 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 	@return `NULL` if there aren't enough resources to create a new client; otherwise, pointer to `struct irc_client` for this user.
 	@warning `ip_addr` is used as is; no string duplication happens.
 */
-static struct irc_client *create_client(char *ip_addr, int socket) {
+static struct irc_client *create_client(char *ip_addr, int socket, SSL *ssl) {
 	struct irc_client *new_client;
 	if ((new_client = malloc(sizeof(struct irc_client))) == NULL) {
 		return NULL;
@@ -162,7 +164,8 @@ static struct irc_client *create_client(char *ip_addr, int socket) {
 	new_client->socket_fd = socket;
 	new_client->server = NULL; /* local client */
 	new_client->is_registered = 0;
-	new_client->uses_ssl = 0;
+	new_client->uses_ssl = (ssl == NULL) ? 0 : 1;
+	new_client->ssl = ssl;
 	new_client->realname = NULL;
 	new_client->nick = NULL;
 	new_client->username = NULL;
@@ -205,6 +208,7 @@ void destroy_client(void *arg) {
 	It frees every dynamic allocated resource, closes the socket, stops the callback mechanism by detaching the watcher from the events loop, and destroys this client's
 	ev_loop.
 	@param client The client to free
+	@todo find the way to free client->ssl
 */
 static void free_client(struct irc_client *client) {
 	/* Some fields, such as client->realname, can be NULL if the client is not registered.
@@ -216,6 +220,10 @@ static void free_client(struct irc_client *client) {
 	free(client->nick);
 	free(client->username);
 	free(client->server);
+	//if(client->ssl == NULL){
+		//SSL_shutdown(client->ssl);
+		//SSL_free(client->ssl);
+	//}
 	close(client->socket_fd);
 	ev_io_stop(client->ev_loop, &client->ev_watcher); /* Stop the callback mechanism */
 	ev_break(client->ev_loop, EVBREAK_ONE); /* Stop iterating */

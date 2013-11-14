@@ -1,6 +1,8 @@
 #ifndef __IRC_CLIENT_GUARD__
 #define __IRC_CLIENT_GUARD__
 #include <ev.h>
+#include <openssl/ssl.h>
+
 /** @file
 	@brief Functions that deal with irc clients
 
@@ -25,6 +27,7 @@ struct irc_client {
 	unsigned is_registered : 1; /**<bit field indicating if this client has registered his connection */
 	unsigned uses_ssl : 1; /**<bit field indicating if this client is using a secure connection */
 	int socket_fd; /**<the socket descriptor used to communicate with this client */
+	SSL *ssl; /**<main SSL structure, created per establish connection*/
 };
 
 /** This structure serves as a wrapper to pass arguments to this client's thread initialization function. `pthread_create()` is capable of passing a generic pointer holding the arguments, thus, we encapsulate
@@ -33,6 +36,7 @@ struct irc_client {
 struct irc_client_args_wrapper {
 	int socket; /**<socket file descriptor for the new connection. Typically, this is the return value from `accept()` */
 	char *ip_addr; /**<the new client's ip address */
+	SSL *ssl; /**<main SSL structure, created per establish connection*/
 };
 
 /* Documented in client.c */		

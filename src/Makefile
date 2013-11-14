@@ -5,7 +5,7 @@ FILES = clients/client.c clients/client_list.c yaircd.c msg/parsemsg.c msg/msgio
 CC = gcc
 CFLAGS = -o $(BINARY_NAME) -Wall
 INCLUDES = -Iinclude
-LIBS = -lpthread -lev
+LIBS = -lpthread -lev -lssl -lcrypto
 COMPILE = $(CC) $(CFLAGS) $(INCLUDES) $(LIBS)
 
 all: $(FILES)
