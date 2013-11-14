@@ -7,10 +7,13 @@
 #include "msgio.h"
 #include "wrappers.h"
 
+#include <openssl/ssl.h>
+
 /** @file
 	@brief Implementation for send_* functions.
 	
 	@author Filipe Goncalves
+	@author Fabio Ribeiro
 	@date November 2013
 */
 
@@ -31,7 +34,13 @@ inline void write_to(struct irc_client *client, char *buf, size_t len) {
 		}
 	}
 	else {
-		/* Write to SSL socket... */
+		/*poor man in the middle*/
+		if((SSL_write(client->ssl, buf, len))==-1) { 
+			/*
+			  Someone got frustated and possibly cut the physical link.
+			 */
+			pthread_exit(NULL);
+		}		
 	}
 }
 
@@ -63,8 +72,15 @@ inline int read_from(struct irc_client *client, char *buf, size_t len) {
 		return msg_size;
 	}
 	else {
-		/* Read from SSL socket... */
-		return 0;
+		/*Read through SSL*/
+		msg_size = SSL_read(client->ssl, buf, len); 
+		if(msg_size == -1 || msg_size == 0) { 
+			/*
+			  Read operation wasn't successful. SSL_get_error() to find. 
+			 */
+			pthread_exit(NULL);
+		}
+		return msg_size;
 	}
 }
 
