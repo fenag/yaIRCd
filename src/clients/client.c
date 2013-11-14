@@ -128,6 +128,7 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 		else {
 			msg_in[msg_size-1] = '\0';
 		}
+		printf("Message received: %s\n", msg_in);
 		parse_res = parse_msg(msg_in, &prefix, &cmd, params, &params_no);
 		if (parse_res == -1) {
 			send_err_unknowncommand(client, "");

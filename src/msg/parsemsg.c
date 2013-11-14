@@ -195,7 +195,6 @@ static void bring_to_top(char *to, char *buf, int length) {
 */
 void read_data(struct irc_client *client) {
 	struct irc_message *client_msg = client->last_msg;
-	char *buf = client_msg->msg+client_msg->index;
 	if (sizeof(client_msg->msg) <= client_msg->index) {
 		/* If we get here, it means we have read a characters sequence of at least MAX_MSG_SIZE length without finding
 		   the message terminators \r\n. A lame client is messing around with the server. Reset the message buffer and log
@@ -204,7 +203,7 @@ void read_data(struct irc_client *client) {
 		fprintf(stderr, "Parse error: message exceeds maximum allowed length. Received by %s\n", client->nick == NULL ? "<unregistered>" : client->nick);
 		initialize_irc_message(client_msg);
 	}
-	client_msg->index += read_from(client, buf, sizeof(client_msg->msg)-client_msg->index);
+	client_msg->index += read_from(client, client_msg->msg+client_msg->index, sizeof(client_msg->msg)-client_msg->index);
 }
 
 /** Analyzes the incoming messages buffer and the information read from the socket to determine if there's any IRC message that can be retrieved from the buffer at the moment.
@@ -229,19 +228,21 @@ int next_msg(struct irc_message *client_msg, char **msg) {
 		; /* Intentionally left blank */
 		
 	/* assert: i == client_msg->index || buf[i] == '\n' */
-	if (buf[i] == '\n') {
-		/* assert: i < client_msg->index */
-		len = i - client_msg->msg_begin + 1;
-		*msg = client_msg->msg+client_msg->msg_begin;
-		client_msg->last_stop = client_msg->msg_begin = i+1;
-		return len;
-	}
-	else {
-		/* assert: i == client_msg->index  && buf[i] != '\n' */
+	if (i == client_msg->index) {
 		bring_to_top(client_msg->msg, client_msg->msg+client_msg->msg_begin, client_msg->index -= client_msg->msg_begin);
 		client_msg->last_stop = client_msg->index;
 		client_msg->msg_begin = 0;
-		return MSG_CONTINUE;
+		return MSG_CONTINUE;	
+	}
+	else {
+		/* Wooho, a new message! */
+		len = i - client_msg->msg_begin;
+		*msg = client_msg->msg+client_msg->msg_begin;
+		if ((client_msg->last_stop = client_msg->msg_begin = i+1) == sizeof(client_msg->msg)) {
+			/* Wrap around */
+			initialize_irc_message(client_msg);
+		}
+		return len;
 	}
 }
 
