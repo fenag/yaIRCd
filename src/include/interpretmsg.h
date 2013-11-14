@@ -11,4 +11,4 @@
 */
 
 /* Documented in source file */
-int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size, int has_prefix);
+int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size);

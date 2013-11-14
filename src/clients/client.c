@@ -96,6 +96,11 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 	struct irc_client *client;
 	char *msg_in;
 	int msg_size;
+	int params_no;
+	int parse_res;
+	char *prefix;
+	char *cmd;
+	char *params[MAX_IRC_PARAMS];
 	
     if (revents & EV_ERROR) {
         fprintf(stderr, "::client.c:manage_client_messages(): unexpected EV_ERROR on client event watcher\n");
@@ -116,22 +121,16 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 		}
 		/* parsemsg.c says it is safe to write to msg_in[msg_size-2] since msg_in will hold a message with at least the terminating sequence \r\n */
 		msg_in[msg_size-2] = '\0';
-	}
-	/*
-	parse_res = parse_msg(msg_in, msg_size, &prefix, &cmd, params, &params_no);
-	if (parse_res == -1) {
-		if (!client->is_registered) {
-			/* RFC Section 4.1: until the connection is registered, the server must respond to any non-registration commands with ERR_NOTREGISTERED 
-			send_err_notregistered(client);
+		parse_res = parse_msg(msg_in, &prefix, &cmd, params, &params_no);
+		if (parse_res == -1) {
+			send_err_unknowncommand(client, "");
+			continue;
 		}
-		else {
-			send_err_unknowncommand(client, ""); /* Send empty command, since it is not safe to use cmd, because -1 was returned 
+		if (interpret_msg(client, prefix, cmd, params, params_no) == 1) {
+			/* Disconnect client */
+			
 		}
 	}
-	else if (interpret_msg(client, prefix, cmd, params, params_no, parse_res) == 1) {
-		/* Disconnect client 
-		
-	}*/
 }
 
 /** Creates a new client instance that will be used throughout this client's lifetime.

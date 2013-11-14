@@ -72,7 +72,7 @@ inline ssize_t read_from(struct irc_client *client, char *buf, size_t len) {
 	@param client The erratic client to notify
 */
 void send_err_notregistered(struct irc_client *client) {
-	char desc[] = " :You have not registered";
+	char desc[] = " :You have not registered\r\n";
 	write_to(client, ERR_NOTREGISTERED, NUMREPLY_WIDTH);
 	write_to(client, desc, sizeof(desc)-1);
 }
@@ -85,7 +85,7 @@ void send_err_notregistered(struct irc_client *client) {
 			   Note that `cmd` must not be a `NULL` pointer. An empty command is a characters sequence such that `*cmd == &lsquo;\0$rsquo;`.
 */
 void send_err_unknowncommand(struct irc_client *client, char *cmd) {
-	char desc[] = " :Unknown command";
+	char desc[] = " :Unknown command\r\n";
 	char emptycmd[] = " NULL_CMD";
 	write_to(client, ERR_UNKNOWNCOMMAND, NUMREPLY_WIDTH);
 	if (*cmd != '\0') {
@@ -102,7 +102,7 @@ void send_err_unknowncommand(struct irc_client *client, char *cmd) {
 	@param client The erratic client to notify
 */
 void send_err_nonicknamegiven(struct irc_client *client) {
-	char desc[] = " :No nickname given";
+	char desc[] = " :No nickname given\r\n";
 	write_to(client, ERR_NONICKNAMEGIVEN, NUMREPLY_WIDTH);
 	write_to(client, desc, sizeof(desc)-1);
 }
@@ -113,7 +113,7 @@ void send_err_nonicknamegiven(struct irc_client *client) {
 	@warning `cmd` cannot be the empty string. This should never be a problem, since the message is not syntactically incorrect and there is a command defined.
 */
 void send_err_needmoreparams(struct irc_client *client, char *cmd) {
-	char desc[] = " :Not enough parameters";
+	char desc[] = " :Not enough parameters\r\n";
 	write_to(client, ERR_NEEDMOREPARAMS, NUMREPLY_WIDTH);
 	write_to(client, " ", 1);
 	write_to(client, cmd, strlen(cmd));
@@ -125,7 +125,7 @@ void send_err_needmoreparams(struct irc_client *client, char *cmd) {
 	@param nick A pointer to a null terminated characters sequence with the invalid nickname.
 */
 void send_err_erroneusnickname(struct irc_client *client, char *nick) {
-	char desc[] = " :Erroneus nickname";
+	char desc[] = " :Erroneus nickname\r\n";
 	write_to(client, ERR_ERRONEUSNICKNAME, NUMREPLY_WIDTH);
 	write_to(client, " ", 1);
 	write_to(client, nick, strlen(nick));
@@ -137,7 +137,7 @@ void send_err_erroneusnickname(struct irc_client *client, char *nick) {
 	@param nick A pointer to a null terminated characters sequence with the invalid nickname.
 */
 void send_err_nicknameinuse(struct irc_client *client, char *nick) {
-	char desc[] = " :Nickname is already in use";
+	char desc[] = " :Nickname is already in use\r\n";
 	write_to(client, ERR_NICKNAMEINUSE, NUMREPLY_WIDTH);
 	write_to(client, " ", 1);
 	write_to(client, nick, strlen(nick));
@@ -148,7 +148,7 @@ void send_err_nicknameinuse(struct irc_client *client, char *nick) {
 	@param client The erratic client to notify
 */
 void send_err_alreadyregistred(struct irc_client *client) {
-	char desc[] = " :You may not reregister.";
+	char desc[] = " :You may not reregister.\r\n";
 	write_to(client, ERR_ALREADYREGISTRED, NUMREPLY_WIDTH);
 	write_to(client, desc, sizeof(desc)-1);
 }
@@ -158,9 +158,9 @@ void send_err_alreadyregistred(struct irc_client *client) {
 	@todo Make this configurable, including the server name.
 */
 void send_motd(struct irc_client *client) {
-	char begin[] = " :- development.yaircd.org Message of the day - ";
+	char begin[] = " :- development.yaircd.org Message of the day - \r\n";
 	char during[] = " :- ";
-	char end[] = " :End of /MOTD command";
+	char end[] = " :End of /MOTD command\r\n";
 	/* TEMP - make this configurable */
 	int i;
 	char *motd[] = {
@@ -179,6 +179,7 @@ void send_motd(struct irc_client *client) {
 		write_to(client, RPL_MOTD, NUMREPLY_WIDTH);
 		write_to(client, during, sizeof(during)-1);
 		write_to(client, motd[i], strlen(motd[i]));
+		write_to(client, "\r\n", 2);
 	}
 	
 	write_to(client, RPL_ENDOFMOTD, NUMREPLY_WIDTH);

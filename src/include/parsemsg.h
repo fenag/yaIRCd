@@ -51,7 +51,7 @@ struct irc_message {
 /* Documented in parsemsg.c */
 void initialize_irc_message(struct irc_message *in);
 void read_data(struct irc_client *client);
-int parse_msg(char *buf, int size, char **prefix, char **cmd, char *params[MAX_IRC_PARAMS], int *params_filled);
+int parse_msg(char *buf, char **prefix, char **cmd, char *params[MAX_IRC_PARAMS], int *params_filled);
 int next_msg(struct irc_message *client_msg, char **msg);
 
 #endif /* __PARSEMSG_GUARD__ */

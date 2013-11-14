@@ -26,12 +26,11 @@
 	@param cmd Pointer to a null terminated characters sequence that denotes the command part of the message, as returned by `parse_msg()`.
 	@param params Array of pointers to the command parameters filled by `parse_msg()`.
 	@param params_size How many parameters are stored in `params`. This must be an integer greater than or equal to 0.
-	@param has_prefix `1` if `prefix` points to a valid prefix; `0` otherwise (the message has no prefix).
 	@return `1` If the interpreted command shall result in client disconnection from server (i.e., client issued a QUIT command); `0` otherwise.
 	@note ERR_NICKCOLLISION is not considered here, because no server links exist yet.
 	@todo Implement QUIT command, and the other commands as well
 */
-int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size, int has_prefix) {
+int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size) {
 	if (!client->is_registered) {
 		if (strcasecmp(cmd, ==, "nick")) {
 			if (params_size < 1) {

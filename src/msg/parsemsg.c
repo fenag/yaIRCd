@@ -91,8 +91,8 @@ static int read_params(char *buf, char *params[MAX_IRC_PARAMS]) {
 	The message buffer is manipulated and its contents will be different after the function returns. Namely, space separators can be overwritten with a `NUL` character.
 	This function can be safely called by different threads, as long as each thread passes different arguments.
 	@param buf Buffer containing the new message. It is assumed that the buffer is null terminated.
-	@param size Number of characters in `buf`, not counting with the null terminating character. IRC messages must end with \\r\\n. This parameter is used to quickly check if this message follows the rule.
 	@param prefix When a prefix exists, `*prefix` will point to the beginning of the prefix field (first character after `:`) in `buf`. The end of the prefix is determined by a `NUL` character.
+		   If there is no prefix, `*prefix` is `NULL`.
 	@param cmd `*cmd` will point to the beginning of the command field (first non space character in the message; first non space character after prefix if one exists). The end is determined by a `NUL` character.
 	@param params An array of pointers to a character sequence. Each array element points to a position in `buf` denoting a parameter. Parameters are null terminated.
 	@param params_filled `*params_filled` will hold the number of parameters parsed. Thus, after returning, it is valid to reference any position `i` in `params` as long as `i >= 0 && i < *params_filled`.
@@ -100,29 +100,24 @@ static int read_params(char *buf, char *params[MAX_IRC_PARAMS]) {
 				<li>`-1` if an error occurred, meaning there was a syntax error. Syntax errors that can be detected include: 
 					 <ol>
 						<li>The case that a message only contains a prefix field, in which case the value of `*prefix` is undefined;</li>
-						<li>The case that a message does not conform to the RFC specification that it must end with \\r\\n;</li>
 						<li>The case that there are more parameters in a command than the maximum allowed by the RFC, in which case the contents of `params[i]` is undefined, but no buffer overflow conditions occur.</li>
 					</ol>
 				</li>
-				<li>`0` if no prefix exists in the parsed message (in which case the value of `*prefix` remains unchanged)</li>
-				<li>`1` if there's a prefix in the parsed message</li>
+				<li>`0` on success</li>
 	@warning `buf` is destructively changed. `*prefix`, `*cmd`, and `params[i]` all point to different positions in `buf`. No memory is allocated inside this function, only pointer manipulation takes place.
 	@warning When `*params_filled > 0`, note that, according to the RFC, it is possible that `params[*params_filled-1]` points to a parameter with spaces. This is the case everytime a trailing parameter was prefixed with `:`
 	@warning `params` is assumed to contain enough space for the maximum number of parameters allowed for an IRC message (as of this writing, 15). It can be bigger than that, but this function will ignore any additional space.
-	@warning When `-1` is returned, it is not guaranteed that `cmd` and `prefix` point to a null terminated characters sequence, and the value in `*params_filled` is undefined. Thus, the caller shall always check the return value
+	@warning When `-1` is returned, it is not guaranteed that `*cmd` and `*prefix` point to a null terminated characters sequence, and the value in `*params_filled` is undefined. Thus, the caller shall always check the return value
 			 of this function before using any of the information it provides.
 */
-int parse_msg(char *buf, int size, char **prefix, char **cmd, char *params[MAX_IRC_PARAMS], int *params_filled) {
+int parse_msg(char *buf, char **prefix, char **cmd, char *params[MAX_IRC_PARAMS], int *params_filled) {
 	char *current;
 	char *next;
 	int ret;
 	
-	if (size < 2 || buf[size-1] != '\n' || buf[size-2] != '\r') {
-		return -1;
-	}
-	buf[size-2] = '\0';
 	current = skipspaces(buf);
 	ret = 0;
+	*prefix = NULL;
 	if (*current == ':') {
 		next = skipnonspaces(current+1);
 		if (*next == '\0' || next == current+1) {
