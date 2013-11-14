@@ -158,6 +158,7 @@ void send_err_alreadyregistred(struct irc_client *client) {
 	@todo Make this configurable, including the server name.
 */
 void send_motd(struct irc_client *client) {
+	char from[] = ":development.yaircd.org ";
 	char begin[] = " :- development.yaircd.org Message of the day - \r\n";
 	char during[] = " :- ";
 	char end[] = " :End of /MOTD command\r\n";
@@ -172,17 +173,26 @@ void send_motd(struct irc_client *client) {
 		"Good luck! :P"
 	};
 	
+	write_to(client, from, sizeof(from)-1);
 	write_to(client, RPL_MOTDSTART, NUMREPLY_WIDTH);
+	write_to(client, " ", 1);
+	write_to(client, client->nick, strlen(client->nick));
 	write_to(client, begin, sizeof(begin)-1);
 	
 	for (i = 0; i < sizeof(motd)/sizeof(motd[0]); i++) {
+		write_to(client, from, sizeof(from)-1);
 		write_to(client, RPL_MOTD, NUMREPLY_WIDTH);
+		write_to(client, " ", 1);
+		write_to(client, client->nick, strlen(client->nick));
 		write_to(client, during, sizeof(during)-1);
 		write_to(client, motd[i], strlen(motd[i]));
 		write_to(client, "\r\n", 2);
 	}
-	
+		
+	write_to(client, from, sizeof(from)-1);
 	write_to(client, RPL_ENDOFMOTD, NUMREPLY_WIDTH);
+	write_to(client, " ", 1);
+	write_to(client, client->nick, strlen(client->nick));
 	write_to(client, end, sizeof(end)-1);
 }
 
@@ -191,24 +201,37 @@ void send_motd(struct irc_client *client) {
 	@todo Make this correct to present settings properly
 */
 void send_welcome(struct irc_client *client) {
+	char from[] = ":development.yaircd.org ";
 	char welcome[] = " :Welcome to the Internet Relay Network teste!test@localhost";
 	char host[] = " :Your host is ME, running version 1";
 	char created[] = " :This server was created now";
 	char myinfo[] = " :development.yaircd.org 1 ui mo";
 	
+	write_to(client, from, sizeof(from)-1);
 	write_to(client, RPL_WELCOME, NUMREPLY_WIDTH);
+	write_to(client, " ", 1);
+	write_to(client, client->nick, strlen(client->nick));
 	write_to(client, welcome, sizeof(welcome)-1);
 	write_to(client, "\r\n", 2);
 	
+	write_to(client, from, sizeof(from)-1);
 	write_to(client, RPL_YOURHOST, NUMREPLY_WIDTH);
+	write_to(client, " ", 1);
+	write_to(client, client->nick, strlen(client->nick));
 	write_to(client, host, sizeof(host)-1);
 	write_to(client, "\r\n", 2);
 	
+	write_to(client, from, sizeof(from)-1);
 	write_to(client, RPL_CREATED, NUMREPLY_WIDTH);
+	write_to(client, " ", 1);
+	write_to(client, client->nick, strlen(client->nick));
 	write_to(client, created, sizeof(created)-1);
 	write_to(client, "\r\n", 2);
 	
+	write_to(client, from, sizeof(from)-1);
 	write_to(client, RPL_MYINFO, NUMREPLY_WIDTH);
+	write_to(client, " ", 1);
+	write_to(client, client->nick, strlen(client->nick));
 	write_to(client, myinfo, sizeof(myinfo)-1);
 	write_to(client, "\r\n", 2);
 }

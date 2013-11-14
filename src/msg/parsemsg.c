@@ -165,7 +165,6 @@ int parse_msg(char *buf, char **prefix, char **cmd, char *params[MAX_IRC_PARAMS]
 	@param in The structure to initialize.
 */
 void initialize_irc_message(struct irc_message *in) {
-	in->status = 0;
 	in->index = 0;
 	in->last_stop = 0;
 	in->msg_begin = 0;
@@ -210,46 +209,35 @@ void read_data(struct irc_client *client) {
 
 /** Analyzes the incoming messages buffer and the information read from the socket to determine if there's any IRC message that can be retrieved from the buffer at the moment.
 	@param client_msg The structure representing state information for the sockets reading performed earlier.
-	@param msg If a new message is available, `*msg` will point to the beginning of a characters sequence that holds an IRC message terminated with \\r\\n.
-	@return This function returns a negative constant if no new message is available. Possible values for this constant are:
-			<ul>
-				<li>`MSG_CONTINUE` - this means that, at the moment, it is not possible to retrieve a complete IRC message, and that the caller shall wait until there is more incoming data in the socket</li>
-				<li>`MSG_FINISH_ERR` - a message that can't possibly be well formed has been detected. This often happens when more than `MAX_MSG_SIZE` characters have been read without a terminating sequence.</li>
-			</ul>
+	@param msg If a new message is available, `*msg` will point to the beginning of a characters sequence that holds an IRC message terminated with \\r\\n or \\n.
+			   The RFC mandates that IRC messages terminate with \\r\\n, but we found clients that do not follow this rule and only terminate messages with \\n. Both approaches are supported: when \\n is read,
+			   it is assumed that this is the end of the message.
+	@return This function returns `MSG_CONTINUE`, which is a negative constant, if no new message is available.
+			This means that, at the moment, it is not possible to retrieve a complete IRC message, and that the caller shall wait until there is more incoming data in the socket.
 			In case of success, the the length of a new IRC message is returned, and `*msg` will point to the beginning of the message. Any access in `(*msg)[0..length-1]` is valid. On success, `length` is guaranteed
-			to be greater than or equal to 2, since an IRC message is terminated by \\r\\n. Thus, it is safe for the upper caller to null-terminate an IRC message by executing `(*msg)[length-2] = &lsquo;\\0&rsquo;`.
+			to be greater than or equal to 1, since at least a newline character must have been read.
 	@warning No space allocation takes place, only pointer manipulation.
 	@warning Always check for the return codes for this function before using `*msg`. Its contents are undefined when the return value is not a positive integer.
+	@warning An IRC message can terminate with either \\n or \\r\\n. Thus, it is not guaranteed that `length-2 >= 0` and `(*msg)[length-2] == &lsquo;\\r&rsquo;`; the only safe assumption is that
+			 `length-1 >= 0` and `(*msg)[length-1] == &lsquo;\\n&rsquo;`.
 */
 int next_msg(struct irc_message *client_msg, char **msg) {
 	int i;
 	int len;
 	char *buf = client_msg->msg;
-	for (i = client_msg->last_stop; client_msg->status != (STATUS_SEEN_CR | STATUS_SEEN_LF) && i < client_msg->index; i++) {
-		if (buf[i] == '\r') {
-			client_msg->status |= STATUS_SEEN_CR;
-		}
-		else if (buf[i] == '\n') {
-			client_msg->status |= STATUS_SEEN_LF;
-		}
-	}
-	/* assert: i == client_msg->index || client_msg->status == (STATUS_SEEN_CR | STATUS_SEEN_LF) */
-	if (client_msg->status == (STATUS_SEEN_CR | STATUS_SEEN_LF)) {
-		/* assert: (buf[i-1] == '\r' || buf[i-1] == '\n') && i-1 < client_msg->index */
-		client_msg->status = 0;
-		len = i - client_msg->msg_begin;
+	for (i = client_msg->last_stop; i < client_msg->index && buf[i] != '\n'; i++)
+		; /* Intentionally left blank */
+		
+	/* assert: i == client_msg->index || buf[i] == '\n' */
+	if (buf[i] == '\n') {
+		/* assert: i < client_msg->index */
+		len = i - client_msg->msg_begin + 1;
 		*msg = client_msg->msg+client_msg->msg_begin;
-		client_msg->last_stop = i;
-		client_msg->msg_begin = i;
-		if (len >= 2 && buf[i-1] == '\n' && buf[i-2] == '\r') {
-			return len;
-		} else {
-			initialize_irc_message(client_msg);
-			return MSG_FINISH_ERR;
-		}
+		client_msg->last_stop = client_msg->msg_begin = i+1;
+		return len;
 	}
 	else {
-		/* assert: i == client_msg->index  && client_msg->status != (STATUS_SEEN_CR | STATUS_SEEN_LF) */
+		/* assert: i == client_msg->index  && buf[i] != '\n' */
 		bring_to_top(client_msg->msg, client_msg->msg+client_msg->msg_begin, client_msg->index -= client_msg->msg_begin);
 		client_msg->last_stop = client_msg->index;
 		client_msg->msg_begin = 0;
