@@ -164,226 +164,226 @@
 
 /* Command responses */
 /** Dummy reply number. Not used. */
-#define RPL_NONE 300U
+#define RPL_NONE "300"
 
 /** Reply format used by USERHOST to list replies to the query list. */
-#define RPL_USERHOST 302U
+#define RPL_USERHOST "302"
 
 /** Reply format used by ISON to list replies to the query list. */
-#define RPL_ISON 303U
+#define RPL_ISON "303"
 
 /** Reply after setting aray */
-#define RPL_AWAY 301U
+#define RPL_AWAY "301"
 
 /** Reply after unsetting away */
-#define RPL_UNAWAY 305U
+#define RPL_UNAWAY "305"
 
 /** These replies are used with the AWAY command (if allowed). RPL_AWAY is sent to any client sending a PRIVMSG to a client which is away. RPL_AWAY is only sent by the server to which the client is connected. Replies RPL_UNAWAY and RPL_NOWAWAY are sent when the client removes and sets an AWAY message. */
-#define RPL_NOWAWAY 306U
+#define RPL_NOWAWAY "306"
 
 /** WHOIS command reply */
-#define RPL_WHOISUSER 311U
+#define RPL_WHOISUSER "311"
 
 /** WHOIS (server) command reply */
-#define RPL_WHOISSERVER 312U
+#define RPL_WHOISSERVER "312"
 
 /** WHOIS Operator command reply */
-#define RPL_WHOISOPERATOR 313U
+#define RPL_WHOISOPERATOR "313"
 
 /** WHOIS idle reply */
-#define RPL_WHOISIDLE 317U
+#define RPL_WHOISIDLE "317"
 
 /** WHOIS end reply */
-#define RPL_ENDOFWHOIS 318U
+#define RPL_ENDOFWHOIS "318"
 
 /** Replies 311 - 313, 317 - 319 are all replies generated in response to a WHOIS message. Given that there are enough parameters present, the answering server must either formulate a reply out of the above numerics (if the query nick is found) or return an error reply. The '*' in RPL_WHOISUSER is there as the literal character and not as a wild card. For each reply set, only RPL_WHOISCHANNELS may appear more than once (for long lists of channel names). The purpose of the RPL_WHOISCHANNELS messages are to enumerate all the channels of which a user is a member. The '@' and '+' characters next to the channel name indicate whether a client is a channel operator or has been granted permission to speak on a moderated channel. The RPL_ENDOFWHOIS reply is used to mark the end of processing a WHOIS message. */
-#define RPL_WHOISCHANNELS 319U
+#define RPL_WHOISCHANNELS "319"
 
 /** Similar to whois, but for whowas */
-#define RPL_WHOWASUSER 314U
+#define RPL_WHOWASUSER "314"
 
 /** When replying to a WHOWAS message, a server must use the replies RPL_WHOWASUSER, RPL_WHOISSERVER or ERR_WASNOSUCHNICK for each nickname in the presented list. At the end of all reply batches, there must be RPL_ENDOFWHOWAS (even if there was only one reply and it was an error). */
-#define RPL_ENDOFWHOWAS 369U
+#define RPL_ENDOFWHOWAS "369"
 
 /** Start of list reply */
-#define RPL_LISTSTART 321U
+#define RPL_LISTSTART "321"
 
 /** End of list reply */
-#define RPL_LIST 322U
+#define RPL_LIST "322"
 
 /** Replies RPL_LISTSTART, RPL_LIST, RPL_LISTEND mark the start, actual replies with data and end of the server's response to a LIST command. If there are no channels available to return, only the start and end reply must be sent.  */
-#define RPL_LISTEND 323U
+#define RPL_LISTEND "323"
 
 /** Channel modes reply */
-#define RPL_CHANNELMODEIS 324U
+#define RPL_CHANNELMODEIS "324"
 
 /** No topic set reply */
-#define RPL_NOTOPIC 331U
+#define RPL_NOTOPIC "331"
 
 /** When sending a TOPIC message to determine the channel topic, one of two replies is sent. If the topic is set, RPL_TOPIC is sent back else RPL_NOTOPIC.  */
-#define RPL_TOPIC 332U
+#define RPL_TOPIC "332"
 
 /** Returned by the server to indicate that the attempted INVITE message was successful and is being passed onto the end client. */
-#define RPL_INVITING 341U
+#define RPL_INVITING "341"
 
 /** Returned by a server answering a SUMMON message to indicate that it is summoning that user. */
-#define RPL_SUMMONING 342U
+#define RPL_SUMMONING "342"
 
 /** Reply by the server showing its version details. The \<version\> is the version of the software being used (including any patchlevel revisions) and the \<debuglevel\> is used to indicate if the server is running in "debug mode". The "comments" field may contain any comments about the version or further version details. */
-#define RPL_VERSION 351U
+#define RPL_VERSION "351"
 
 /** WHO reply */
-#define RPL_WHOREPLY 352U
+#define RPL_WHOREPLY "352"
 
 /** The RPL_WHOREPLY and RPL_ENDOFWHO pair are used to answer a WHO message. The RPL_WHOREPLY is only sent if there is an appropriate match to the WHO query. If there is a list of parameters supplied with a WHO message, a RPL_ENDOFWHO must be sent after processing each list item with \<name\> being the item. More info on RFC. */
-#define RPL_ENDOFWHO 315U
+#define RPL_ENDOFWHO "315"
 
 /** Reply to a NAMES message; see RPL_ENDOFNAMES */
-#define RPL_NAMREPLY 353U
+#define RPL_NAMREPLY "353"
 
 /** To reply to a NAMES message, a reply pair consisting of RPL_NAMREPLY and RPL_ENDOFNAMES is sent by the server back to the client. If there is no channel found as in the query, then only RPL_ENDOFNAMES is returned. The exception to this is when a NAMES message is sent with no parameters and all visible channels and contents are sent back in a series of RPL_NAMEREPLY messages with a RPL_ENDOFNAMES to mark the end. */
-#define RPL_ENDOFNAMES 366U
+#define RPL_ENDOFNAMES "366"
 
 /** LINKS command reply */
-#define RPL_LINKS 364U
+#define RPL_LINKS "364"
 
 /** In replying to the INKS message, a server must send replies back using the RPL_LINKS numeric and mark the end of the list using an RPL_ENDOFLINKS reply. */
-#define RPL_ENDOFLINKS 365U
+#define RPL_ENDOFLINKS "365"
 
 /** Bans list */
-#define RPL_BANLIST 367U
+#define RPL_BANLIST "367"
 
 /** When listing the active 'bans' for a given channel, a server is required to send the list back using the RPL_BANLIST and RPL_ENDOFBANLIST messages. A separate RPL_BANLIST is sent for each active banid. After the banids have been listed (or if none present) a RPL_ENDOFBANLIST must be sent. */
-#define RPL_ENDOFBANLIST 368U
+#define RPL_ENDOFBANLIST "368"
 
 /** For INFO command */
-#define RPL_INFO 371U
+#define RPL_INFO "371"
 
 /** A server responding to an INFO message is required to send all its 'info' in a series of RPL_INFO messages with a RPL_ENDOFINFO reply to indicate the end of the replies. */
-#define RPL_ENDOFINFO 374U
+#define RPL_ENDOFINFO "374"
 
 /** Signalizes start of MOTD message */
-#define RPL_MOTDSTART 375U
+#define RPL_MOTDSTART "375"
 
 /** Used when MOTD is being sent */
-#define RPL_MOTD 372U
+#define RPL_MOTD "372"
 
 /** When responding to the MOTD message and the MOTD file is found, the file is displayed line by line, with each line no longer than 80 characters, using RPL_MOTD format replies. These should be surrounded by a RPL_MOTDSTART (before the RPL_MOTDs) and an RPL_ENDOFMOTD (after). */
-#define RPL_ENDOFMOTD 376U
+#define RPL_ENDOFMOTD "376"
 
 /** RPL_YOUREOPER is sent back to a client which has just successfully issued an OPER message and gained operator status. */
-#define RPL_YOUREOPER 381U
+#define RPL_YOUREOPER "381"
 
 /** If the REHASH option is used and an operator sends a REHASH message, an RPL_REHASHING is sent back to the operator. */
-#define RPL_REHASHING 382U
+#define RPL_REHASHING "382"
 
 /** When replying to the TIME message, a server must send the reply using the RPL_TIME format above. The string showing the time need only contain the correct day and time there. There is no further requirement for the time string. */
-#define RPL_TIME 391U
+#define RPL_TIME "391"
 
 /** Start of USERS command output */
-#define RPL_USERSSTART 392U
+#define RPL_USERSSTART "392"
 
 /** Result of USERS command */
-#define RPL_USERS 393U
+#define RPL_USERS "393"
 
 /** End of output for USERS command */
-#define RPL_ENDOFUSERS 394U
+#define RPL_ENDOFUSERS "394"
 
 /** If the USERS message is handled by a server, the replies RPL_USERSTART, RPL_USERS, RPL_ENDOFUSERS and RPL_NOUSERS are used. RPL_USERSSTART must be sent first, following by either a sequence of RPL_USERS or a single RPL_NOUSER. Following this is RPL_ENDOFUSERS. */
-#define RPL_NOUSERS 395U
+#define RPL_NOUSERS "395"
 
 /** Intermediate servers must return a RPL_TRACELINK reply to indicate that the TRACE passed through it and where its going next */
-#define RPL_TRACELINK 200U
+#define RPL_TRACELINK "200"
 
 /** Used for TRACE command. See RFC for more info. */
-#define RPL_TRACECONNECTING 201U
+#define RPL_TRACECONNECTING "201"
 
 /** Used for TRACE command. See RFC for more info. */
-#define RPL_TRACEHANDSHAKE 202U
+#define RPL_TRACEHANDSHAKE "202"
 
 /** Invalid TRACE */
-#define RPL_TRACEUNKNOWN 203U
+#define RPL_TRACEUNKNOWN "203"
 
 /** Used for TRACE command. See RFC for more info. */
-#define RPL_TRACEOPERATOR 204U
+#define RPL_TRACEOPERATOR "204"
 
 /** Used for TRACE command. See RFC for more info. */
-#define RPL_TRACEUSER 205U
+#define RPL_TRACEUSER "205"
 
 /** Used for TRACE command. See RFC for more info. */
-#define RPL_TRACESERVER 206U
+#define RPL_TRACESERVER "206"
 
 /** Used for TRACE command. See RFC for more info. */
-#define RPL_TRACENEWTYPE 208U
+#define RPL_TRACENEWTYPE "208"
 
 /** The RPL_TRACE* are all returned by the server in response to the TRACE message. How many are returned is dependent on the the TRACE message and whether it was sent by an operator or not. There is no predefined order for which occurs first. Replies RPL_TRACEUNKNOWN, RPL_TRACECONNECTING and RPL_TRACEHANDSHAKE are all used for connections which have not been fully established and are either unknown, still attempting to connect or in the process of completing the 'server handshake'. RPL_TRACELINK is sent by any server which handles a TRACE message and has to pass it on to another server. The list of RPL_TRACELINKs sent in response to a TRACE command traversing the IRC network should reflect the actual connectivity of the servers themselves along that path. RPL_TRACENEWTYPE is to be used for any connection which does not fit in the other categories but is being displayed anyway. */
-#define RPL_TRACELOG 261U
+#define RPL_TRACELOG "261"
 
 /** For /stats */
-#define RPL_STATSLINKINFO 211U
+#define RPL_STATSLINKINFO "211"
 
 /** Reply of command count in stats */
-#define RPL_STATSCOMMANDS 212U
+#define RPL_STATSCOMMANDS "212"
 
 /** clines stats reply */
-#define RPL_STATSCLINE 213U
+#define RPL_STATSCLINE "213"
 
 /** nlines stats reply */
-#define RPL_STATSNLINE 214U
+#define RPL_STATSNLINE "214"
 
 /** ilines stats reply */
-#define RPL_STATSILINE 215U
+#define RPL_STATSILINE "215"
 
 /** klines stats reply */
-#define RPL_STATSKLINE 216U
+#define RPL_STATSKLINE "216"
 
 /** yline stats reply */
-#define RPL_STATSYLINE 218U
+#define RPL_STATSYLINE "218"
 
 /** End of stats reply */
-#define RPL_ENDOFSTATS 219U
+#define RPL_ENDOFSTATS "219"
 
 /** lline stats reply */
-#define RPL_STATSLLINE 241U
+#define RPL_STATSLLINE "241"
 
 /** uptime information reply for /stats command */
-#define RPL_STATSUPTIME 242U
+#define RPL_STATSUPTIME "242"
 
 /** reply to report current O:Lines to /stats */
-#define RPL_STATSOLINE 243U
+#define RPL_STATSOLINE "243"
 
 /** hlines stats reply */
-#define RPL_STATSHLINE 244U
+#define RPL_STATSHLINE "244"
 
 /** To answer a query about a client's own mode, RPL_UMODEIS is sent back. */
-#define RPL_UMODEIS 221U
+#define RPL_UMODEIS "221"
 
 /** Reply to LUSER command. Counts number of users, number of invisible users, and number of servers. */
-#define RPL_LUSERCLIENT 251U
+#define RPL_LUSERCLIENT "251"
 
 /** Replies back how many operators are online to LUSER command */
-#define RPL_LUSEROP 252U
+#define RPL_LUSEROP "252"
 
 /** Reports number of unknown connections to LUSER command */
-#define RPL_LUSERUNKNOWN 253U
+#define RPL_LUSERUNKNOWN "253"
 
 /** Reports how many channels are formede to LUSER command */
-#define RPL_LUSERCHANNELS 254U
+#define RPL_LUSERCHANNELS "254"
 
 /** In processing an LUSERS message, the server sends a set of replies from RPL_LUSERCLIENT, RPL_LUSEROP, RPL_USERUNKNOWN, RPL_LUSERCHANNELS and RPL_LUSERME. When replying, a server must send back RPL_LUSERCLIENT and RPL_LUSERME. The other replies are only sent back if a non-zero count is found for them. */
-#define RPL_LUSERME 255U
+#define RPL_LUSERME "255"
 
 /** Server administrative info. reply */
-#define RPL_ADMINME 256U
+#define RPL_ADMINME "256"
 
 /** General details about the server. See RPL_ADMINEMAIL. */
-#define RPL_ADMINLOC1 257U
+#define RPL_ADMINLOC1 "257"
 
 /** More specific server details. See RPL_ADMINEMAIL. */
-#define RPL_ADMINLOC2 258U
+#define RPL_ADMINLOC2 "258"
 
 /** When replying to an ADMIN message, a server is expected to use replies RLP_ADMINME through to RPL_ADMINEMAIL and provide a text message with each. For RPL_ADMINLOC1 a description of what city, state and country the server is in is expected, followed by details of the university and department (RPL_ADMINLOC2) and finally the administrative contact for the server (an email address here is required) in RPL_ADMINEMAIL.  */
-#define RPL_ADMINEMAIL 259U
+#define RPL_ADMINEMAIL "259"
 /* End command responses */
 
 /* Quit messages */

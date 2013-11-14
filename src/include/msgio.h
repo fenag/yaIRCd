@@ -20,3 +20,4 @@ void send_err_needmoreparams(struct irc_client *client, char *cmd);
 void send_err_erroneusnickname(struct irc_client *client, char *nick);
 void send_err_nicknameinuse(struct irc_client *client, char *nick);
 void send_err_alreadyregistred(struct irc_client *client);
+void send_motd(struct irc_client *client);
