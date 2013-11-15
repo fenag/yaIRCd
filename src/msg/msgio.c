@@ -130,9 +130,10 @@ inline ssize_t read_from(struct irc_client *client, char *buf, size_t len) {
 	@param client The erratic client to notify
 */
 void send_err_notregistered(struct irc_client *client) {
-	char desc[] = " :You have not registered\r\n";
-	write_to(client, ERR_NOTREGISTERED, NUMREPLY_WIDTH);
-	write_to(client, desc, sizeof(desc)-1);
+	char *format =
+		":%s " ERR_NOTREGISTERED " * :You have not registered\r\n";
+	yaircd_send(client, format,
+		"development.yaircd.org");
 }
 
 /** Sends ERR_UNKNOWNCOMMAND to a client who seems to be messing around with commands.
@@ -143,26 +144,20 @@ void send_err_notregistered(struct irc_client *client) {
 			   Note that `cmd` must not be a `NULL` pointer. An empty command is a characters sequence such that `*cmd == &lsquo;\0$rsquo;`.
 */
 void send_err_unknowncommand(struct irc_client *client, char *cmd) {
-	char desc[] = " :Unknown command\r\n";
-	char emptycmd[] = " NULL_CMD";
-	write_to(client, ERR_UNKNOWNCOMMAND, NUMREPLY_WIDTH);
-	if (*cmd != '\0') {
-		write_to(client, " ", (size_t) 1);
-		write_to(client, cmd, strlen(cmd));
-	}
-	else {
-		write_to(client, emptycmd, sizeof(emptycmd)-1);
-	}
-	write_to(client, desc, sizeof(desc)-1);
+	char *format =
+		":%s " ERR_UNKNOWNCOMMAND " %s %s :Unknown command\r\n";
+	yaircd_send(client, format,
+		"development.yaircd.org", client->is_registered ? client->nick : "*", *cmd != '\0' ? cmd : "NULL_CMD");
 }
 
 /** Sends ERR_NONICKNAMEGIVEN to a client who issued a NICK command but didn't provide a nick
 	@param client The erratic client to notify
 */
 void send_err_nonicknamegiven(struct irc_client *client) {
-	char desc[] = " :No nickname given\r\n";
-	write_to(client, ERR_NONICKNAMEGIVEN, NUMREPLY_WIDTH);
-	write_to(client, desc, sizeof(desc)-1);
+	char *format =
+		":%s" ERR_NONICKNAMEGIVEN " %s :No nickname given\r\n";
+	yaircd_send(client, format,
+		"development.yaircd.org", client->is_registered ? client->nick : "*");
 }
 
 /** Sends ERR_NEEDMOREPARAMS to a client who issued a command but didn't provide enough parameters for his request to be fulfilled
@@ -171,11 +166,10 @@ void send_err_nonicknamegiven(struct irc_client *client) {
 	@warning `cmd` cannot be the empty string. This should never be a problem, since the message is not syntactically incorrect and there is a command defined.
 */
 void send_err_needmoreparams(struct irc_client *client, char *cmd) {
-	char desc[] = " :Not enough parameters\r\n";
-	write_to(client, ERR_NEEDMOREPARAMS, NUMREPLY_WIDTH);
-	write_to(client, " ", 1);
-	write_to(client, cmd, strlen(cmd));
-	write_to(client, desc, sizeof(desc)-1);
+	char *format =
+		":%s " ERR_NEEDMOREPARAMS " %s %s :Not enough parameters\r\n";
+	yaircd_send(client, format,
+		"development.yaircd.org", client->is_registered ? client->nick : "*", cmd);
 }
 
 /** Sends ERR_ERRONEUSNICKNAME to a client who issued a NICK command and chose a nickname that contains invalid characters or exceeds `MAX_NICK_LENGTH`
@@ -183,11 +177,10 @@ void send_err_needmoreparams(struct irc_client *client, char *cmd) {
 	@param nick A pointer to a null terminated characters sequence with the invalid nickname.
 */
 void send_err_erroneusnickname(struct irc_client *client, char *nick) {
-	char desc[] = " :Erroneus nickname\r\n";
-	write_to(client, ERR_ERRONEUSNICKNAME, NUMREPLY_WIDTH);
-	write_to(client, " ", 1);
-	write_to(client, nick, strlen(nick));
-	write_to(client, desc, sizeof(desc)-1);
+	char *format =
+		":%s " ERR_ERRONEUSNICKNAME " %s %s :Erroneous nickname\r\n";
+	yaircd_send(client, format,
+		"development.yaircd.org", client->is_registered ? client->nick : "*", nick);
 }
 
 /** Sends ERR_NICKNAMEINUSE to a client who issued a NICK command and chose a nickname that is already in use.
@@ -195,20 +188,21 @@ void send_err_erroneusnickname(struct irc_client *client, char *nick) {
 	@param nick A pointer to a null terminated characters sequence with the invalid nickname.
 */
 void send_err_nicknameinuse(struct irc_client *client, char *nick) {
-	char desc[] = " :Nickname is already in use\r\n";
-	write_to(client, ERR_NICKNAMEINUSE, NUMREPLY_WIDTH);
-	write_to(client, " ", 1);
-	write_to(client, nick, strlen(nick));
-	write_to(client, desc, sizeof(desc)-1);
+	char *format =
+		":%s " ERR_NICKNAMEINUSE " %s %s :Nickname is already in use\r\n";
+	yaircd_send(client, format,
+		"development.yaircd.org", client->is_registered ? client->nick : "*", nick);
 }
 
 /** Sends ERR_ALREADYREGISTRED to a client who issued a USER command even though he was already registred.
 	@param client The erratic client to notify
 */
 void send_err_alreadyregistred(struct irc_client *client) {
-	char desc[] = " :You may not reregister.\r\n";
-	write_to(client, ERR_ALREADYREGISTRED, NUMREPLY_WIDTH);
-	write_to(client, desc, sizeof(desc)-1);
+	char *format =
+		":%s " ERR_ALREADYREGISTRED " %s :You may not reregister.\r\n";
+	
+	yaircd_send(client, format,
+		"development.yaircd.org", client->nick);
 }
 
 /** Sends MOTD to a client.
@@ -216,42 +210,24 @@ void send_err_alreadyregistred(struct irc_client *client) {
 	@todo Make this configurable, including the server name.
 */
 void send_motd(struct irc_client *client) {
-	char from[] = ":development.yaircd.org ";
-	char begin[] = " :- development.yaircd.org Message of the day - \r\n";
-	char during[] = " :- ";
-	char end[] = " :End of /MOTD command\r\n";
-	/* TEMP - make this configurable */
-	int i;
-	char *motd[] = {
-		"Hello, welcome to this IRC server.",
-		"This is an experimental server with very few features implemented.",
-		"Only PRIVMSG is allowed at the moment, sorry!",
-		"A team of highly trained monkeys has been dispatched to deal with this unpleasant situation.",
-		"For now, there's really nothing you can do besides guessing who's online and PRIVMSG'ing them",
-		"Good luck! :P"
-	};
-	
-	write_to(client, from, sizeof(from)-1);
-	write_to(client, RPL_MOTDSTART, NUMREPLY_WIDTH);
-	write_to(client, " ", 1);
-	write_to(client, client->nick, strlen(client->nick));
-	write_to(client, begin, sizeof(begin)-1);
-	
-	for (i = 0; i < sizeof(motd)/sizeof(motd[0]); i++) {
-		write_to(client, from, sizeof(from)-1);
-		write_to(client, RPL_MOTD, NUMREPLY_WIDTH);
-		write_to(client, " ", 1);
-		write_to(client, client->nick, strlen(client->nick));
-		write_to(client, during, sizeof(during)-1);
-		write_to(client, motd[i], strlen(motd[i]));
-		write_to(client, "\r\n", 2);
-	}
-		
-	write_to(client, from, sizeof(from)-1);
-	write_to(client, RPL_ENDOFMOTD, NUMREPLY_WIDTH);
-	write_to(client, " ", 1);
-	write_to(client, client->nick, strlen(client->nick));
-	write_to(client, end, sizeof(end)-1);
+	const char *format =
+		":%s " RPL_MOTDSTART " %s :- %s Message of the day - \r\n"
+		":%s " RPL_MOTD " %s :- Hello, welcome to this IRC server.\r\n"
+		":%s " RPL_MOTD " %s :- This is an experimental server with very few features implemented.\r\n"
+		":%s " RPL_MOTD " %s :- Only PRIVMSG is allowed at the moment, sorry!\r\n"
+		":%s " RPL_MOTD " %s :- A team of highly trained monkeys has been dispatched to deal with this unpleasant situation.\r\n"
+		":%s " RPL_MOTD " %s :- For now, there's really nothing you can do besides guessing who's online and PRIVMSG'ing them.\r\n"
+		":%s " RPL_MOTD " %s :- Good luck! :P\r\n"
+		":%s " RPL_ENDOFMOTD " %s :End of /MOTD command\r\n";
+	yaircd_send(client, format,
+		"development.yaircd.org", client->nick, "development.yaircd.org",
+		"development.yaircd.org", client->nick,
+		"development.yaircd.org", client->nick,
+		"development.yaircd.org", client->nick,
+		"development.yaircd.org", client->nick,
+		"development.yaircd.org", client->nick,
+		"development.yaircd.org", client->nick,
+		"development.yaircd.org", client->nick);
 }
 
 /** Sends the welcome message to a newly registred user

@@ -51,6 +51,9 @@ int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *para
 					send_err_nicknameinuse(client, params[0]);
 					return 0;
 			}
+			if (client->nick != NULL) {
+				free(client->nick);
+			}
 			if ((client->nick = strdup(params[0])) == NULL) {
 				/* No memory for this client's nick, sorry! */
 				client_list_delete(client);
