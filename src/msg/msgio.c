@@ -17,6 +17,19 @@
 	@date November 2013
 */
 
+/** A printf equivalent version for yaIRCd that sends a set of arbitrarily long IRC messages into a client's socket.
+	This function shall be called everytime a new message is to be written to a client. No other functions in the entire IRCd can write to a client's socket.
+	It is an abstraction to the sockets interface. The internal implementation uses a buffer capable of storing a message with at most `MAX_MSG_SIZE` characters. If data to be delivered is bigger
+	than the buffer size, this function will break it up in blocks of `MAX_MSG_SIZE` characters and write them one by one into the client's socket.
+	Thus, this abstraction allows anyone to call this function with a format string arbitrarily long. The format string can hold multiple IRC messages.
+	The primary role for this function is to minimize the number of `write()` syscalls. It is imperative that the code using this function tries to pass as many data as it can at the moment, so that big
+	chunks of information are sent.
+	@param client The client to send information to
+	@param fmt The format string, pretty much like printf. However, only the `%s` formatter is supported.
+	@param ... Optional parameters to match `%s` formatters.
+	@warning Always check to make sure that the number of formatters match the number of optional parameters passed. GCC will not issue a warning as it would for printf, because this is not part of the standard library.
+	@warning It is assumed that the code using this function is well behaved; in particular, it is assumed that `fmt` is well formed, and that a `%` is always followed by an `s`, because only `%s` is supported.
+*/
 static void yaircd_send(struct irc_client *client, const char *fmt, ...) {
 	const char *ptr;
 	char *str;

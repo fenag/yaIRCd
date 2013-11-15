@@ -28,6 +28,43 @@
 	connection request arrives. When that happens, a new thread is created to deal with our fortunate new client,
 	and the main process goes back to rest until another client pops in and the whole cycle repeats.
 	
+	The basic architecture is a client-server model where each client is represented by a dedicated thread that monitors the client's socket.
+	The parent thread listens on the main socket for new incoming connections. When one arrives, it creates a separate thread to deal with that new client
+	during his session, and goes back to listening for new clients. We use detached threads, because no calls to `pthread_join()` are used. This makes it slightly easier
+	and more efficient for the operating system to deal with, since no state information must be stored about dead threads. This is often the case for server daemons.
+	
+	There are a couple of details worth mentioning about the whole IRCd. First of all, it relies heavily on libev. libev is a high performance
+	event loop library. Only when there is actually something interesting to process (a new command arrived, a message must be sent, etc.), will the corresponding thread
+	be awaken. When there's nothing to do, libev makes sure that threads are not given any CPU time. Using threads in this way shall scale well. It is very important to learn
+	and read about libev. The general idea is that libev works by using event loops. An event loop, as the name says, is a loop that triggers something when an event occurs.
+	The loop is not really running, it is a virtual loop that seems to be blocking. When an interesting event occurs, a given function is called to process that event - the callback function.
+	Events are defined using watchers. There are various types of watchers. One of them is the IO watcher, which allows you to get notified when a file stream is readable. You don't have to
+	block on a read operation, because you will only be notified that there is something to read when there really is something to read. Thus, `read()` never blocks.
+	yaIRCd creates an event loop for each new client connection. In other words, each thread has its own events loop, and each thread registers an IO watcher for the client's socket. As a consequence,
+	each client's thread is sleeping most of the time, and it is awaken when new messages are available to read on the socket.
+	A similar process happens when we need to write to a client's socket.
+	Some questions that bugged the development team when adopting the library will probably be your questions as well. These include:
+	<ul>
+		<li>What happens if an event is being processed and another event arises? For example, a thread is doing some work because an IO watcher fired, and meanwhile, a timeout event fires (libev allows you
+		    to define timers to expire and call a function after a given period of time). It turns out that there is no way another event can arise while a callback is being executed. Events are fetched from the kernel
+			only after callbacks have been processed. Events are queued: if we were processing some input when the timer expired, only at some later point in time after finishing processing this input will we be notified 
+			that the timer expired.
+		</li>
+		<li>How does one shutdown the server properly with libev? Don't you free every structure and client? How do you exit orderly? Well, shutting down the server properly involves messing with signals. 
+			Mixing threads and signals is often a bad idea (google it if you want to learn why - you should). Thus, the first step would be to block every signal before creating threads, and have a dedicated thread just
+			to handle SIGINT, or leave that up to the parent thread. The thread responsible for dealing with the signal could then be awaken when SIGINT arises, and use `ev_async_send()` to notify every thread that this
+			signal has been activated. For threads to recognize this, it would be necessary that each one has an `ev_async` watcher with the desired exit function as callback. Because events cannot arise at the same time another
+			event is running, we are assured that this would be executed atomically, and the thread would terminate orderly. According to libev's documentation, "[...] Even though signals are very asynchronous, libev will try its 
+			best to deliver signals synchronously, i.e. as part of the normal event processing [...]". When asked about "will try its best", libev's author said: "the 'its best' refers to the fact that signal handling on posix is 
+			quite complicated - as long as _you_ don't do anything fancy, libev will always deliver tham synchronously".
+			Note that, in the case that it is the parent thread dealing with SIGINT and notifying every client, it cannot terminate before all of the threads are notified AND exit, because if the parent thread exits first,
+			every thread is terminated. Thus, besides using this complex signal handling scheme, we wouldn't be able to use detached threads, since `pthread_join()` would have to be used in order to wait for each thread
+			to exit orderly. IRCd is not a complex protocol and does not make use of any transactions scheme. Because of that, we decided to let the operating system do its job. SIGINT is not handled in here; the process will
+			terminate when receiving SIGINT, as well as every thread. The only use of shutting down properly was to free every memory used and close sockets, but the operating system will do it anyway, so why bother?
+			This will make it harder to detect memory leaks with valgrind, but it is not a problem: valgrind makes a pretty good job distinguishing between still reachable and definitely lost memory blocks.
+		</li>
+	</ul>
+	
 	@author Filipe Goncalves
 	@author Fabio Ribeiro
 	@date November 2013
