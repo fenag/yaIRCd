@@ -69,8 +69,8 @@ void *new_client(void *args) {
 		- A thread's cleanup handler to exit gracefully
 	  Let the party begin! 
 	 */
-	ev_io_init(&client->ev_watcher, manage_client_messages, sockfd, EV_READ);
-	ev_io_start(client->ev_loop, &client->ev_watcher);	
+	ev_io_init(&client->io_watcher, manage_client_messages, sockfd, EV_READ);
+	ev_io_start(client->ev_loop, &client->io_watcher);	
 	ev_run(client->ev_loop, 0); /* Go */
 	
 	/* This is never reached, but we need to pair up push() and pop() calls */
@@ -161,6 +161,7 @@ static struct irc_client *create_client(char *ip_addr, int socket, SSL *ssl) {
 		free(new_client);
 		return NULL;
 	}
+	client_queue_init(&new_client->write_queue);
 	new_client->hostname = ip_addr;
 	new_client->socket_fd = socket;
 	new_client->server = NULL; /* local client */
@@ -198,9 +199,13 @@ static struct irc_client *create_client(char *ip_addr, int socket, SSL *ssl) {
 */
 void destroy_client(void *arg) {
 	struct irc_client *client = (struct irc_client *) arg;
-	if (client->is_registered) {
-		client_list_delete(client);
-	}
+	/* First, we HAVE to delete this client from the clients list, no matter what.
+	   Why? Because if we delete him, we know for sure that no other thread will be able to reach him and
+	   issue client_enqueue() commands on this guy. List accesses are thread safe; other clients using the list to perform
+	   enqueue operations do so atomically. Thus, after client_list_delete() is completed, no other thread will ever try to access
+	   this client's queue. This is required by client_queue_destroy(), see the documentation in client_queue.c
+	 */
+	client_list_delete(client);
 	/* TODO Notify other clients on the same channel that this client is leaving */
 	free_client(client);
 }
@@ -221,12 +226,13 @@ static void free_client(struct irc_client *client) {
 	free(client->nick);
 	free(client->username);
 	free(client->server);
+	client_queue_destroy(&client->write_queue);
 	//if(client->ssl == NULL){
 		//SSL_shutdown(client->ssl);
 		//SSL_free(client->ssl);
 	//}
 	close(client->socket_fd);
-	ev_io_stop(client->ev_loop, &client->ev_watcher); /* Stop the callback mechanism */
+	ev_io_stop(client->ev_loop, &client->io_watcher); /* Stop the callback mechanism */
 	ev_break(client->ev_loop, EVBREAK_ONE); /* Stop iterating */
 	ev_loop_destroy(client->ev_loop);
 	free(client);

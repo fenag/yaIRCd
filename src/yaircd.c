@@ -273,6 +273,7 @@ int ircd_boot(void) {
 /** Creates a daemon process and boots the ircd by calling `ircd_boot()`
 	@return `0` in case of success; `1` if an error ocurred
 */
+
 int main(void) {
 	return ircd_boot();
 }

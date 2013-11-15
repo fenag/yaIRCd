@@ -2,6 +2,7 @@
 #define __IRC_CLIENT_GUARD__
 #include <ev.h>
 #include <openssl/ssl.h>
+#include "client_queue.h"
 
 /** @file
 	@brief Functions that deal with irc clients
@@ -10,24 +11,27 @@
 	Note that developers are not encouraged to directly manipulate the structure. That would break the abstraction layer.
 	Every operation to be performed in an `irc_client` shall be invoked through a function declared in this header file.
 	@author Filipe Goncalves
+	@author Fabio Ribeiro
 	@date November 2013
 */
 
 struct irc_message;
 /** The structure that describes an IRC client */
 struct irc_client {
-	struct ev_io ev_watcher; /**<libev watcher for this client's socket. This watcher will be responsible for calling the appropriate callback function when there is interesting data to read from the socket. */
+	struct ev_io io_watcher; /**<io watcher for this client's socket. This watcher will be responsible for calling the appropriate callback function when there is interesting data to read from the socket. */
+	struct ev_async async_watcher; /**<async watcher used to wake up this client's thread when a new message to write has just been queued. The notifying thread shall lock this client's queue mutex, insert data, unlock the mutex and call `ev_async_send()` to wake up this thread. */
 	struct ev_loop *ev_loop; /**<libev loop for this client's thread. Each thread holds its own loop. */
-	char *realname; /**<GECOS field */
-	char *hostname; /**<reverse looked up hostname, or the IP address if no reverse is available */
+	struct msg_queue write_queue; /**<Write queue that holds messages waiting to be sent. @see client_queue.h */
+	char *realname; /**<GECOS field. */
+	char *hostname; /**<reverse looked up hostname, or the IP address if no reverse is available. */
 	char *nick; /**<nickname */
 	char *username; /**<ident field */
-	char *server; /**<this client's server ip address. `NULL` if it's a local client */
+	char *server; /**<this client's server ip address. `NULL` if it's a local client. */
 	struct irc_message *last_msg; /**<last IRC message received coming from this client. This structure will be filled as we read this client's socket, and when an entire message is finished reading, this structure will contain the necessary information. */
-	unsigned is_registered : 1; /**<bit field indicating if this client has registered his connection */
-	unsigned uses_ssl : 1; /**<bit field indicating if this client is using a secure connection */
-	int socket_fd; /**<the socket descriptor used to communicate with this client */
-	SSL *ssl; /**<main SSL structure, created per establish connection*/
+	unsigned is_registered : 1; /**<bit field indicating if this client has registered his connection. */
+	unsigned uses_ssl : 1; /**<bit field indicating if this client is using a secure connection. */
+	int socket_fd; /**<the socket descriptor used to communicate with this client. */
+	SSL *ssl; /**<main SSL structure, created per establish connection. */
 };
 
 /** This structure serves as a wrapper to pass arguments to this client's thread initialization function. `pthread_create()` is capable of passing a generic pointer holding the arguments, thus, we encapsulate
