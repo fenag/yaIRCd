@@ -1,9 +1,11 @@
 --- WARNING ---
 
-This is an ongoing project. It is still in an early development stage. The IRC Server is not compatible with irc clients yet.
+This is an ongoing project. It is still in an early development stage. IRC Clients can only connect and disconnect to the server, no other commands are implemented yet.
 
 Dependencies:
-libpthread, libev
+libpthread
+libev (libev4, libev-dev)
+libssl, libcrypto (libssl-dev)
 
 To compile:
 make
@@ -18,4 +20,4 @@ To run:
 After that, open up a few terminals and try:
 telnet 127.0.0.1 6667
 
-Type in a few messages and check that they are received in every connected terminal. To close your connection, type q
+Or open up an IRC client and connect to the server. No commands other than NICK, USER and QUIT are implemented. NICK only works for registering the connection.
