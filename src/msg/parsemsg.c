@@ -213,12 +213,14 @@ void read_data(struct irc_client *client) {
 			   it is assumed that this is the end of the message.
 	@return This function returns `MSG_CONTINUE`, which is a negative constant, if no new message is available.
 			This means that, at the moment, it is not possible to retrieve a complete IRC message, and that the caller shall wait until there is more incoming data in the socket.
-			In case of success, the the length of a new IRC message is returned, and `*msg` will point to the beginning of the message. Any access in `(*msg)[0..length-1]` is valid. On success, `length` is guaranteed
-			to be greater than or equal to 1, since at least a newline character must have been read.
+			In case of success, the length of a new IRC message is returned (excluding the count for the terminating newline character), and `*msg` will point to the beginning of the message. 
+			The message's characters are in `(*msg)[0..length-1]`. On success, `length` is guaranteed to be greater than or equal to 1, since at least a newline character must have been read. 
+			Thus, `(*msg)[length]` is a valid access: this position always holds a newline character. Consequently, it is safe to null terminate an IRC message by issuing `(*msg)[length] = $lsquo;\\0&rsquo;`.
+			Note, however, that the message may be terminated by \\r\\n (depends on the client); in this case, the caller might want to null terminate the message in position `length-1` instead.
 	@warning No space allocation takes place, only pointer manipulation.
 	@warning Always check for the return codes for this function before using `*msg`. Its contents are undefined when the return value is not a positive integer.
-	@warning An IRC message can terminate with either \\n or \\r\\n. Thus, it is not guaranteed that `length-2 >= 0` and `(*msg)[length-2] == &lsquo;\\r&rsquo;`; the only safe assumption is that
-			 `length-1 >= 0` and `(*msg)[length-1] == &lsquo;\\n&rsquo;`.
+	@warning It is assumed that an IRC message can terminate with either \\n or \\r\\n. The RFC mandates that every message shall be terminated with \\r\\n, but many clients do not follow this and only use \\n.
+			 Thus, it is not guaranteed that `length-1 >= 0`; the only safe assumption is that `length >= 0` and `(*msg)[length] == &lsquo;\\n&rsquo;`.
 */
 int next_msg(struct irc_message *client_msg, char **msg) {
 	int i;

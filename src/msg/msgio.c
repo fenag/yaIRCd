@@ -3,10 +3,11 @@
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <openssl/ssl.h>
+#include <stdarg.h>
 #include "protocol.h"
 #include "msgio.h"
 #include "wrappers.h"
-#include <openssl/ssl.h>
 
 /** @file
 	@brief Implementation for send_* functions.
@@ -15,6 +16,46 @@
 	@author Fabio Ribeiro
 	@date November 2013
 */
+
+static void yaircd_send(struct irc_client *client, const char *fmt, ...) {
+	const char *ptr;
+	char *str;
+	char buffer[MAX_MSG_SIZE+1];
+	size_t bufp;
+	int len;
+	va_list args;
+	va_start(args, fmt);
+	
+	ptr = fmt;
+	bufp = 0;
+	while (*ptr != '\0') {
+		if (*ptr != '%') {
+			if (bufp == sizeof(buffer)-1) {
+				write_to(client, buffer, bufp);
+				bufp = 0;
+			}
+			buffer[bufp++] = *ptr++;
+		}
+		else {
+			ptr += 2;
+			str = va_arg(args, char *);
+			if (bufp == sizeof(buffer)-1) {
+				write_to(client, buffer, sizeof(buffer)-1);
+				bufp = 0;
+			}
+			while ((len = snprintf(buffer+bufp, sizeof(buffer)-bufp, "%s", str)) >= sizeof(buffer)-bufp) {
+				/* assert: buffer[sizeof(buffer)-1] == '\0' */
+				str += sizeof(buffer)-bufp-1;
+				write_to(client, buffer, sizeof(buffer)-1);
+				bufp = 0;
+			}
+			bufp += len;
+		}
+	}
+	if (bufp > 0) {
+		write_to(client, buffer, bufp);
+	}
+}
 
 /** This function knows how to write to a client. It is an abstraction used by every function that wants to write to a client socket.
 	It knows how to deal with plaintext sockets and SSL sockets. No other function in the whole ircd should worry about this.
@@ -82,6 +123,8 @@ inline ssize_t read_from(struct irc_client *client, char *buf, size_t len) {
 		return msg_size;
 	}
 }
+
+
 
 /** Sends ERR_NOTREGISTERED to a client who tried to use any command other than NICK, PASS or USER before registering.
 	@param client The erratic client to notify
@@ -216,38 +259,16 @@ void send_motd(struct irc_client *client) {
 	@todo Make this correct to present settings properly
 */
 void send_welcome(struct irc_client *client) {
-	char from[] = ":development.yaircd.org ";
-	char welcome[] = " :Welcome to the Internet Relay Network teste!test@localhost";
-	char host[] = " :Your host is ME, running version 1";
-	char created[] = " :This server was created now";
-	char myinfo[] = " :development.yaircd.org 1 ui mo";
-	
-	write_to(client, from, sizeof(from)-1);
-	write_to(client, RPL_WELCOME, NUMREPLY_WIDTH);
-	write_to(client, " ", 1);
-	write_to(client, client->nick, strlen(client->nick));
-	write_to(client, welcome, sizeof(welcome)-1);
-	write_to(client, "\r\n", 2);
-	
-	write_to(client, from, sizeof(from)-1);
-	write_to(client, RPL_YOURHOST, NUMREPLY_WIDTH);
-	write_to(client, " ", 1);
-	write_to(client, client->nick, strlen(client->nick));
-	write_to(client, host, sizeof(host)-1);
-	write_to(client, "\r\n", 2);
-	
-	write_to(client, from, sizeof(from)-1);
-	write_to(client, RPL_CREATED, NUMREPLY_WIDTH);
-	write_to(client, " ", 1);
-	write_to(client, client->nick, strlen(client->nick));
-	write_to(client, created, sizeof(created)-1);
-	write_to(client, "\r\n", 2);
-	
-	write_to(client, from, sizeof(from)-1);
-	write_to(client, RPL_MYINFO, NUMREPLY_WIDTH);
-	write_to(client, " ", 1);
-	write_to(client, client->nick, strlen(client->nick));
-	write_to(client, myinfo, sizeof(myinfo)-1);
-	write_to(client, "\r\n", 2);
+	const char *format = 
+		":%s " RPL_WELCOME " %s :Welcome to the Internet Relay Network %s!%s@%s\r\n"
+		":%s " RPL_YOURHOST " %s :Your host is %s, running version %s\r\n"
+		":%s " RPL_CREATED " %s :This server was created %s\r\n"
+		":%s " RPL_MYINFO " %s :%s %s %s %s\r\n";
+
+	yaircd_send(client, format,
+		"development.yaircd.org", client->nick, client->nick, client->username, client->hostname,
+		"development.yaircd.org", client->nick, "development.yaircd.org", "v1.0",
+		"development.yaircd.org", client->nick, "15/11/2013",
+		"development.yaircd.org", client->nick, "development.yaircd.org", "v1.0", "UMODES=xTR", "CHANMODES=mvil");
 }
 

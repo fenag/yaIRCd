@@ -117,18 +117,17 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 	read_data(client);
 	
 	while ((msg_size = next_msg(client->last_msg, &msg_in)) != MSG_CONTINUE) {
-		if (msg_size == 1 || (msg_size == 2 && msg_in[msg_size-2] == '\r')) {
+		if (msg_size == 0 || (msg_size == 1 && msg_in[msg_size-1] == '\r')) {
 			/* Silently ignore empty messages */
 			continue;
 		}
 		/* Handle clients which terminate messages with \n and clients that use \r\n */
-		if (msg_size >= 2 && msg_in[msg_size-2] == '\r') {
-			msg_in[msg_size-2] = '\0';
-		}
-		else {
+		if (msg_size >= 1 && msg_in[msg_size-1] == '\r') {
 			msg_in[msg_size-1] = '\0';
 		}
-		printf("Message received: %s\n", msg_in);
+		else {
+			msg_in[msg_size] = '\0';
+		}
 		parse_res = parse_msg(msg_in, &prefix, &cmd, params, &params_no);
 		if (parse_res == -1) {
 			send_err_unknowncommand(client, "");
