@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <ev.h>
 #include <pthread.h>
+#include <stddef.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include "client.h"
@@ -26,11 +27,16 @@
 	@todo Implement timeouts
 */
 
+/** Global async watcher used to notify threads that messages are waiting to be written into a client's socket.
+	The watcher is global, but each client's thread uses it to wake up different event loops corresponding to different clients.
+*/
+
 static void manage_client_messages(EV_P_ ev_io *watcher, int revents);
 void destroy_client(void *arg);
 static void free_client(struct irc_client *client);
 static struct irc_client *create_client(char *ip_addr, int socket, SSL *ssl);
 void free_thread_arguments(struct irc_client_args_wrapper *);
+static void queue_async_cb(EV_P_ ev_async *w, int revents);
 
 /** Accepts a new client's connection. This function is indirectly called by the threads scheduler. When a new client pops in, the main process allocates a new thread whose init function is this one.
 	This function is used as a wrapper to an internal function. Its purpose is to extract the arguments information that was packed in `irc_client_args_wrapper` and pass them to an internal function
@@ -65,12 +71,14 @@ void *new_client(void *args) {
 	
 	/* At this point, we have:
 		- A client structure successfully allocated
-		- An events loop and a watcher
+		- An events loop and 2 watchers - IO watcher and async watcher
 		- A thread's cleanup handler to exit gracefully
 	  Let the party begin! 
 	 */
 	ev_io_init(&client->io_watcher, manage_client_messages, sockfd, EV_READ);
-	ev_io_start(client->ev_loop, &client->io_watcher);	
+	ev_io_start(client->ev_loop, &client->io_watcher);
+	ev_async_init(&client->async_watcher, queue_async_cb);
+	ev_async_start(client->ev_loop, &client->async_watcher);
 	ev_run(client->ev_loop, 0); /* Go */
 	
 	/* This is never reached, but we need to pair up push() and pop() calls */
@@ -161,7 +169,12 @@ static struct irc_client *create_client(char *ip_addr, int socket, SSL *ssl) {
 		free(new_client);
 		return NULL;
 	}
-	client_queue_init(&new_client->write_queue);
+	if (client_queue_init(&new_client->write_queue) == -1) {
+		ev_loop_destroy(new_client->ev_loop);
+		free(new_client->last_msg);
+		free(new_client);
+		return NULL;
+	}
 	new_client->hostname = ip_addr;
 	new_client->socket_fd = socket;
 	new_client->server = NULL; /* local client */
@@ -173,6 +186,22 @@ static struct irc_client *create_client(char *ip_addr, int socket, SSL *ssl) {
 	new_client->username = NULL;
 	initialize_irc_message(new_client->last_msg);
 	return new_client;
+}
+
+/** Callback function for a client's async watcher.
+	This function is called by libev when another thread issues `async_send()` on this thread's async watcher.
+	We use this mechanism to notify client threads that new data is queued, waiting to be written into the socket.
+	For example, if a thread from client A reads a PRIVMSG command with a message whose destination is B, then A's thread will
+	queue the message into B's queue, and call `async_send()` on B's async watcher, to wake B up. When B wakes up, this function is called.
+	Therefore, the main purpose of this function is to flush a client's queue.
+	@param w Pointer to this client's async watcher. A pointer to the client is obtained with `(struct irc_client *) ((char *)w - offsetof(struct irc_client, async_watcher))`. This pointer manipulation
+			 is necessary to extract the client's structure where `w` is embedded. In doubt, read about `offsetof()` macro in `stddef.h`'s manpage.
+	@param revents libev's flags. Not used for async callbacks.
+*/
+static void queue_async_cb(EV_P_ ev_async *w, int revents) {
+	struct irc_client *client;
+	client = (struct irc_client *) ((char *)w - offsetof(struct irc_client, async_watcher));
+	client_queue_foreach(&client->write_queue, msg_flush, (void *) client);
 }
 
 /** This function is set by the thread init function (`new_client()`) as the cleanup handler for `pthread_exit()`, thus, this is called when a fatal error with this client occurred and
@@ -205,7 +234,9 @@ void destroy_client(void *arg) {
 	   enqueue operations do so atomically. Thus, after client_list_delete() is completed, no other thread will ever try to access
 	   this client's queue. This is required by client_queue_destroy(), see the documentation in client_queue.c
 	 */
-	client_list_delete(client);
+	if (client->is_registered) {
+		client_list_delete(client);
+	}
 	/* TODO Notify other clients on the same channel that this client is leaving */
 	free_client(client);
 }
@@ -226,7 +257,9 @@ static void free_client(struct irc_client *client) {
 	free(client->nick);
 	free(client->username);
 	free(client->server);
-	client_queue_destroy(&client->write_queue);
+	if (client_queue_destroy(&client->write_queue) == -1) {
+		fprintf(stderr, "Warning: client_queue_destroy() reported an error - THIS SHOULD NEVER HAPPEN!\n");
+	}
 	//if(client->ssl == NULL){
 		//SSL_shutdown(client->ssl);
 		//SSL_free(client->ssl);

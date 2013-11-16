@@ -17,6 +17,31 @@
 	@date November 2013
 */
 
+/** Similar to `write_to()`, but in case of socket error, `pthread_exit()` is called.
+	@param client The client to read from.
+	@param buf Buffer to store the message read.
+	@param len Maximum length of the message. This is usually bounded by the size of `buf`. This parameter avoids buffer overflow.
+*/
+inline void write_to_noerr(struct irc_client *client, char *buf, size_t len) {
+	if (write_to(client, buf, len) == -1) {
+		pthread_exit(NULL);
+	}
+}
+
+/** Similar to `read_from()`, but in case of socket error, `pthread_exit()` is called.
+	@param client The client to read from.
+	@param buf Buffer to store the message read.
+	@param len Maximum length of the message. This is usually bounded by the size of `buf`. This parameter avoids buffer overflow.
+	@return A positive integer denoting the number of characters read.
+*/
+inline ssize_t read_from_noerr(struct irc_client *client, char *buf, size_t len) {
+	ssize_t msg_size;
+	if ((msg_size = read_from(client, buf, len)) <= 0) {
+		pthread_exit(NULL);
+	}
+	return msg_size;
+}
+
 /** A printf equivalent version for yaIRCd that sends a set of arbitrarily long IRC messages into a client's socket.
 	This function shall be called everytime a new message is to be written to a client. No other functions in the entire IRCd can write to a client's socket.
 	It is an abstraction to the sockets interface. The internal implementation uses a buffer capable of storing a message with at most `MAX_MSG_SIZE` characters. If data to be delivered is bigger
@@ -44,7 +69,7 @@ static void yaircd_send(struct irc_client *client, const char *fmt, ...) {
 	while (*ptr != '\0') {
 		if (*ptr != '%') {
 			if (bufp == sizeof(buffer)-1) {
-				write_to(client, buffer, bufp);
+				write_to_noerr(client, buffer, bufp);
 				bufp = 0;
 			}
 			buffer[bufp++] = *ptr++;
@@ -53,91 +78,22 @@ static void yaircd_send(struct irc_client *client, const char *fmt, ...) {
 			ptr += 2;
 			str = va_arg(args, char *);
 			if (bufp == sizeof(buffer)-1) {
-				write_to(client, buffer, sizeof(buffer)-1);
+				write_to_noerr(client, buffer, sizeof(buffer)-1);
 				bufp = 0;
 			}
 			while ((len = snprintf(buffer+bufp, sizeof(buffer)-bufp, "%s", str)) >= sizeof(buffer)-bufp) {
 				/* assert: buffer[sizeof(buffer)-1] == '\0' */
 				str += sizeof(buffer)-bufp-1;
-				write_to(client, buffer, sizeof(buffer)-1);
+				write_to_noerr(client, buffer, sizeof(buffer)-1);
 				bufp = 0;
 			}
 			bufp += len;
 		}
 	}
 	if (bufp > 0) {
-		write_to(client, buffer, bufp);
+		write_to_noerr(client, buffer, bufp);
 	}
 }
-
-/** This function knows how to write to a client. It is an abstraction used by every function that wants to write to a client socket.
-	It knows how to deal with plaintext sockets and SSL sockets. No other function in the whole ircd should worry about this.
-	@param client The client to notify.
-	@param buf A characters sequence, possibly not null-terminated, that shall be written to this client's socket.
-	@param len How many characters from `buf` are to be written into this client's socket.
-	@note On success, exactly `len` characters will be written to `client`'s socket. On failure, `pthread_exit()` is called, since we apparently lost connection to this client.
-*/
-inline void write_to(struct irc_client *client, char *buf, size_t len) {
-	if (!client->uses_ssl) {
-		if (send(client->socket_fd, buf, len, 0) == -1) {
-			/* Humm... something went wrong with this socket.
-			   The client's process most likely terminated abruptly
-			 */
-			pthread_exit(NULL);
-		}
-	}
-	else {
-		/*poor man in the middle*/
-		if((SSL_write(client->ssl, buf, len))==-1) { 
-			/*
-			  Someone got frustated and possibly cut the physical link.
-			 */
-			pthread_exit(NULL);
-		}		
-	}
-}
-
-/** This function knows how to read from a client socket. It is an abstraction used by every function that wants to read from a client.
-	It knows how to deal with plaintext sockets and SSL sockets. No other function in the whole ircd should worry about this.
-	@param client The client to read from.
-	@param buf Buffer to store the message read.
-	@param len Maximum length of the message. This is usually bounded by the size of `buf`. This parameter avoids buffer overflow.
-	@return A positive (`> 0`) integer denoting the number of characters read and stored in `buf`.
-	@warning `buf` is not null terminated. The caller must use the return value to know where `buf`'s contents end. Typically, the caller will pass a buffer
-			  with enough space for `j` characters, but will pass a value for `len` equal to `j-1`. This will bound the number of written characters, `i`, to `j-1`, so that
-			  the string can then be null terminated with `buf[i] = &lsquo;\\0&rsquo;`.
-	@note If there is a fatal error with this socket, or if the connection from the client side was shut down, this function will call `pthread_exit()`. As a consequence, the returned value is always
-		  a positive integer.
-*/
-inline ssize_t read_from(struct irc_client *client, char *buf, size_t len) {
-	ssize_t msg_size;
-	if (!client->uses_ssl) {
-		msg_size = recv(client->socket_fd, buf, len, 0);
-		if (msg_size == 0) {
-			/* 0 indicates an orderly shutdown from the client side (typically TCP RST) */
-			pthread_exit(NULL);
-		}
-		if (msg_size == -1) {
-			/* Something went wrong with this socket, drop this client */
-			pthread_exit(NULL);
-		}
-		/* assert: msg_size > 0 && msg_size <= len */
-		return msg_size;
-	}
-	else {
-		/*Read through SSL*/
-		msg_size = SSL_read(client->ssl, buf, len); 
-		if(msg_size == -1 || msg_size == 0) { 
-			/*
-			  Read operation wasn't successful. SSL_get_error() to find. 
-			 */
-			pthread_exit(NULL);
-		}
-		return msg_size;
-	}
-}
-
-
 
 /** Sends ERR_NOTREGISTERED to a client who tried to use any command other than NICK, PASS or USER before registering.
 	@param client The erratic client to notify
@@ -261,3 +217,52 @@ void send_welcome(struct irc_client *client) {
 		"development.yaircd.org", client->nick, "development.yaircd.org", "v1.0", "UMODES=xTR", "CHANMODES=mvil");
 }
 
+/** Sends ERR_NORECIPIENT to a client trying to send a message without a recipient.
+	@param client The erratic client to notify
+	@param cmd The command that originated the error
+*/
+void send_err_norecipient(struct irc_client *client, char *cmd) {
+	const char *format =
+		":%s " ERR_NORECIPIENT " %s :No recipient given (%s)\r\n";
+	yaircd_send(client, format,
+		"development.yaircd.org", client->nick, cmd);
+}
+
+/** Sends ERR_NOTEXTTOSEND to a client trying to send an empty message to another client.
+	@param client The erratic client to notify
+*/
+void send_err_notexttosend(struct irc_client *client) {
+	const char *format =
+		":%s " ERR_NOTEXTTOSEND " %s :No text to send\r\n";
+	yaircd_send(client, format,
+		"development.yaircd.org", client->nick);
+}
+
+/** Sends ERR_NOSUCHNICK to a client who supplied a nonexisting target.
+	@param client The erratic client to notify
+	@param nick The nonexisting target
+*/
+void send_err_nosuchnick(struct irc_client *client, char *nick) {
+	const char *format =
+		":%s " ERR_NOSUCHNICK " %s %s :No such nick/channel\r\n";
+	yaircd_send(client, format,
+		"development.yaircd.org", client->nick, nick);
+}
+
+/** Function used when a client wants to flush his messages write queue.
+	This is indirectly called by the queue library in `client_queue_foreach()` (see `queue_async_cb()`).
+	@param message The message dequeued in the current iteration.
+	@param arg A generic argument passed by the original function that called `client_queue_foreach()`.
+	@warning It is very important to remember that this function will be executed in an atomic block, holding a lock to a client's queue.
+			 Thus, it is imperative that this function does not call `pthread_exit()`.
+*/
+inline void msg_flush(char *message, void *arg) {
+	/* We ignore possible errors that may arise during a write. We use write_to(), not write_to_noerr(),
+	   because write_to_noerr() calls pthread_exit() if things go wrong, and we can't call pthread_exit() here,
+	   since we're holding a lock to a queue. Things would fall apart if we did so.
+	   The thread will eventually be notified that the connection was broken. In the meantime, we just keep writing as if
+	   nothing happened.
+	 */
+	(void) write_to((struct irc_client *) arg, message, strlen(message));
+	free(message);
+}

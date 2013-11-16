@@ -203,7 +203,7 @@ void read_data(struct irc_client *client) {
 		fprintf(stderr, "Parse error: message exceeds maximum allowed length. Received by %s\n", client->nick == NULL ? "<unregistered>" : client->nick);
 		initialize_irc_message(client_msg);
 	}
-	client_msg->index += read_from(client, client_msg->msg+client_msg->index, sizeof(client_msg->msg)-client_msg->index);
+	client_msg->index += read_from_noerr(client, client_msg->msg+client_msg->index, sizeof(client_msg->msg)-client_msg->index);
 }
 
 /** Analyzes the incoming messages buffer and the information read from the socket to determine if there's any IRC message that can be retrieved from the buffer at the moment.

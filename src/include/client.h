@@ -19,7 +19,7 @@ struct irc_message;
 /** The structure that describes an IRC client */
 struct irc_client {
 	struct ev_io io_watcher; /**<io watcher for this client's socket. This watcher will be responsible for calling the appropriate callback function when there is interesting data to read from the socket. */
-	struct ev_async async_watcher; /**<async watcher used to wake up this client's thread when a new message to write has just been queued. The notifying thread shall lock this client's queue mutex, insert data, unlock the mutex and call `ev_async_send()` to wake up this thread. */
+	struct ev_async async_watcher; /**<async watcher used to wake up a client's thread when there is new data queued and waiting to be sent. */
 	struct ev_loop *ev_loop; /**<libev loop for this client's thread. Each thread holds its own loop. */
 	struct msg_queue write_queue; /**<Write queue that holds messages waiting to be sent. @see client_queue.h */
 	char *realname; /**<GECOS field. */

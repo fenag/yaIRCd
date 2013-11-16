@@ -245,6 +245,7 @@ int ircd_boot(void) {
 		fprintf(stderr, "::yaircd.c:main(): Unable to initialize clients list.\n");
 		return 1;
 	}
+	
 	clilen = sizeof(cli_addr);
 	/* Initialize thread creation attributes */
 	if (pthread_attr_init(&thread_attr) != 0) {
