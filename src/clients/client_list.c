@@ -109,15 +109,33 @@ void client_list_destroy(void) {
 	}
 }
 
-/** Finds a client by nickname.
+/** Finds a client by nickname, and performs an action based on that client atomically. The lock is obtained, the list is consulted, and if a client exists, the function provided is called to perform
+	an arbitrary action.
 	@param nick The nickname to look for; must be a null terminated characters sequence.
-	@return `NULL` if no such client exists, or if `nick` contains invalid characters.
-			Pointer to `struct irc_client` of the specified client otherwise.
+	@param f A pointer to a function returning a generic pointer that shall be called if a match is found. 
+			 In such case, `f` is called with the matching client as its first parameter, and with `fargs` as second parameter.
+	@param fargs This will be passed to `f` as a second parameter when a match is found and `f` is called.
+	@param success After this function returns, `*success` will hold `1` if `(*f)()` was called, otherwise it will hold `0`. This allows the caller to have `(*f)()` returning `NULL` and still distinguish between
+				   a successfull match and a nonexisting client.
+	@return The result of evaluating `(*f)(matching_client, fargs)`. If no client matches, `NULL` is returned.
+	@warning Remember that this whole operation - search the list, find a match, call `(*f)()` is performed atomically. Thus, `(*f)()` must be fast (more clients can be waiting to read the list), but more important
+			 than that, careful must be taken if `(*f)()` uses synchronization tools (mutexes, semaphores, etc.) to perform its job. Always remember that the global clients list is locked - using any locking mechanism
+			 inside `(*f)()` is rarely necessary, and can easily introduce deadlock conditions.
+	@warning `(*f)()` must not call `pthread_exit()`, otherwise, the lock for this list is never unlocked, and the whole IRCd freezes.
 */
-struct irc_client *client_list_find_by_nick(char *nick) {
-	struct irc_client *ret;
+void *client_list_find_and_execute(char *nick, void *(*f)(struct irc_client *client, void *args), void *fargs, int *success) {
+	struct irc_client *client;
+	void *ret;
+	*success = 0;
 	pthread_mutex_lock(&clients_mutex);
-	ret = (struct irc_client *) find_word_trie(clients, nick);
+	client = (struct irc_client *) find_word_trie(clients, nick);
+	if (client != NULL) {
+		ret = (*f)(client, fargs);
+		*success = 1;
+	}
+	else {
+		ret = NULL;
+	}
 	pthread_mutex_unlock(&clients_mutex);
 	return ret;
 }
