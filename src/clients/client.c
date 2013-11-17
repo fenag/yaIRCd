@@ -7,6 +7,8 @@
 #include <stddef.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 #include "client.h"
 #include "client_list.h"
 #include "protocol.h"
@@ -34,13 +36,12 @@
 static void manage_client_messages(EV_P_ ev_io *watcher, int revents);
 void destroy_client(void *arg);
 static void free_client(struct irc_client *client);
-static struct irc_client *create_client(char *ip_addr, int socket, SSL *ssl);
+static struct irc_client *create_client(struct irc_client_args_wrapper *args);
 void free_thread_arguments(struct irc_client_args_wrapper *);
 static void queue_async_cb(EV_P_ ev_async *w, int revents);
 
 /** Accepts a new client's connection. This function is indirectly called by the threads scheduler. When a new client pops in, the main process allocates a new thread whose init function is this one.
-	This function is used as a wrapper to an internal function. Its purpose is to extract the arguments information that was packed in `irc_client_args_wrapper` and pass them to an internal function
-	that does the rest of the job.
+	This function creates a new client instance and starts an event loop for this client.
 	@param args A pointer to `struct irc_client_args_wrapper`, casted to `void *`. It is assumed that it points to an address in heap. This is always casted to `struct irc_client_args_wrapper *`.
 	This parameter is `free()`'d when it is not needed anymore; the caller does not need to worry about freeing the memory.
 	We chose heap allocation here because otherwise there would be a possible race condition: after the main process calls `pthread_create()`, it is undefined which instruction is executed next
@@ -50,32 +51,18 @@ static void queue_async_cb(EV_P_ ev_async *w, int revents);
 	@return This function always returns `NULL`
 */
 void *new_client(void *args) {
-	struct irc_client_args_wrapper *arguments = (struct irc_client_args_wrapper *) args;
 	struct irc_client *client;
-	int sockfd;
-	char *ip;
-	SSL *ssl;
-	
-	sockfd = arguments->socket;
-	ip = strdup(arguments->ip_addr);
-	ssl = arguments->ssl;
-	
-	free_thread_arguments(arguments);
-	
-	if (ip == NULL || (client = create_client(ip, sockfd, ssl)) == NULL) {
-		close(sockfd);
+	if ((client = create_client((struct irc_client_args_wrapper *) args)) == NULL) {
 		return NULL;
 	}
-
 	pthread_cleanup_push(destroy_client, (void *) client);
-	
 	/* At this point, we have:
 		- A client structure successfully allocated
 		- An events loop and 2 watchers - IO watcher and async watcher
 		- A thread's cleanup handler to exit gracefully
 	  Let the party begin! 
 	 */
-	ev_io_init(&client->io_watcher, manage_client_messages, sockfd, EV_READ);
+	ev_io_init(&client->io_watcher, manage_client_messages, client->socket_fd, EV_READ);
 	ev_io_start(client->ev_loop, &client->io_watcher);
 	ev_async_init(&client->async_watcher, queue_async_cb);
 	ev_async_start(client->ev_loop, &client->async_watcher);
@@ -124,7 +111,7 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 	
 	read_data(client);
 	
-	while ((msg_size = next_msg(client->last_msg, &msg_in)) != MSG_CONTINUE) {
+	while ((msg_size = next_msg(&client->last_msg, &msg_in)) != MSG_CONTINUE) {
 		if (msg_size == 0 || (msg_size == 1 && msg_in[msg_size-1] == '\r')) {
 			/* Silently ignore empty messages */
 			continue;
@@ -136,6 +123,7 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 		else {
 			msg_in[msg_size] = '\0';
 		}
+		printf("Got new message: %s\n", msg_in);
 		parse_res = parse_msg(msg_in, &prefix, &cmd, params, &params_no);
 		if (parse_res == -1) {
 			send_err_unknowncommand(client, "");
@@ -155,36 +143,69 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 	@return `NULL` if there aren't enough resources to create a new client; otherwise, pointer to `struct irc_client` for this user.
 	@warning `ip_addr` is used as is; no string duplication happens.
 */
-static struct irc_client *create_client(char *ip_addr, int socket, SSL *ssl) {
+static struct irc_client *create_client(struct irc_client_args_wrapper *args) {
 	struct irc_client *new_client;
+	char hostbuf[NI_MAXHOST];
+	char ip[INET_ADDRSTRLEN];
+	/* In the future
+	char ip6[INET6_ADDRSTRLEN];
+	*/
 	if ((new_client = malloc(sizeof(struct irc_client))) == NULL) {
+		free_thread_arguments(args);
 		return NULL;
 	}
 	if ((new_client->ev_loop = ev_loop_new(0)) == NULL) {
 		free(new_client);
-		return NULL;
-	}
-	if ((new_client->last_msg = malloc(sizeof(struct irc_message))) == NULL) {
-		ev_loop_destroy(new_client->ev_loop);
-		free(new_client);
+		free_thread_arguments(args);
 		return NULL;
 	}
 	if (client_queue_init(&new_client->write_queue) == -1) {
 		ev_loop_destroy(new_client->ev_loop);
-		free(new_client->last_msg);
 		free(new_client);
+		free_thread_arguments(args);
 		return NULL;
 	}
-	new_client->hostname = ip_addr;
-	new_client->socket_fd = socket;
+	new_client->socket_fd = args->socket;
 	new_client->server = NULL; /* local client */
 	new_client->is_registered = 0;
-	new_client->uses_ssl = (ssl == NULL) ? 0 : 1;
-	new_client->ssl = ssl;
+	new_client->uses_ssl = (args->ssl != NULL);
+	new_client->ssl = args->ssl;
 	new_client->realname = NULL;
 	new_client->nick = NULL;
 	new_client->username = NULL;
-	initialize_irc_message(new_client->last_msg);
+	new_client->hostname = NULL;
+	initialize_irc_message(&new_client->last_msg);
+	
+	yaircd_send(new_client, ":development.yaircd.org NOTICE AUTH :*** Looking up your hostname...\r\n");
+	if (!args->is_ipv6) {
+		if (getnameinfo((struct sockaddr *) &args->address.ipv4_address, args->address_length, hostbuf, sizeof(hostbuf), NULL, 0, NI_NAMEREQD) != 0) {
+			yaircd_send(new_client, ":development.yaircd.org NOTICE AUTH :*** Couldn't resolve your hostname; using your IP address instead.\r\n");
+			if (inet_ntop(AF_INET, (void *) &args->address.ipv4_address.sin_addr, ip, sizeof(ip)) == NULL) {
+				/* Weird case ... no reverse lookup, and invalid IP..? */
+				fprintf(stderr, "::client.c:create_client(): Couldn't find a reverse hostname, and inet_ntop() reported an error.\n");
+				ev_loop_destroy(new_client->ev_loop);
+				free(new_client);
+				free_thread_arguments(args);
+				return NULL;
+			}
+			if ((new_client->hostname = strdup(ip)) == NULL) {
+				ev_loop_destroy(new_client->ev_loop);
+				free(new_client);
+				free_thread_arguments(args);
+				return NULL;
+			}
+		}
+		else {
+			yaircd_send(new_client, ":development.yaircd.org NOTICE AUTH :*** Found your hostname.\r\n");
+			if ((new_client->hostname = strdup(hostbuf)) == NULL) {
+				ev_loop_destroy(new_client->ev_loop);
+				free(new_client);
+				free_thread_arguments(args);
+				return NULL;
+			}
+		}
+	}
+	free_thread_arguments(args);
 	return new_client;
 }
 

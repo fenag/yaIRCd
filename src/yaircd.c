@@ -77,8 +77,6 @@ static int mainsock_fd; /**<Main socket file descriptor, where new insecure conn
 static int sslsock_fd; /**<SSL socket file descriptor, where new secure connection request arrive */
 static struct sockaddr_in serv_addr; /**<This node's address, namely, the IP and port where we will be listening for new connections. */
 static struct sockaddr_in ssl_addr;
-static struct sockaddr_in cli_addr; /**<The client address structure that will hold information for new connected users. */
-static socklen_t clilen; /**<Length of the client's address. This is needed for `accept()` */
 static pthread_attr_t thread_attr; /**<Threads creation attributes. We use detached threads, since we're not interested in calling `pthread_join()`. */
 
 static const SSL_METHOD *ssl_method;
@@ -313,8 +311,7 @@ int ircd_boot(void) {
 		fprintf(stderr, "::yaircd.c:main(): Unable to initialize clients list.\n");
 		return 1;
 	}
-	
-	clilen = sizeof(cli_addr);
+
 	/* Initialize thread creation attributes */
 	if (pthread_attr_init(&thread_attr) != 0) {
 		/* On Linux, this will never happen */
@@ -351,6 +348,90 @@ int main(void) {
 
 void free_thread_arguments(struct irc_client_args_wrapper *args);
 
+/** This function accepts a new generic incoming connection. It wraps the client's information in a dynamically allocated `irc_client_args_wrapper` structure to be passed to
+	`pthread_create()`. Every new client gets a dedicated thread whose starting point is `new_client()`.
+	This function returns prematurely if:
+		<ul>
+			<li>an `EV_ERROR` occurred, or `EV_READ` was not set for some reason;</li>
+			<li>`accept()` returned an error code and no socket could be created;</li>
+			<li>the client address is malformed, namely, its family is not `AF_INET`;</li>
+			<li>the operating system reports that no thread could be created.</li>
+		</ul>
+	@param revents Bit flags reported by `libev`. Can be `EV_ERROR` or `EV_READ`.
+	@param flags Flags to change default behavior. Possible flags include:
+		   <ul>
+				<li>`SSL_SOCK`, to be used when the new connection is coming from an SSL socket.</li>
+				<li>`IPv6_SOCK`, to be used when the new connection is coming from an IPv6 address.</li>
+		   </ul>
+*/
+static void accept_connection(int revents, int flags) {
+    int newsock_fd;
+	struct irc_client_args_wrapper *thread_arguments; /* Wrapper for passing arguments to thread function */
+	pthread_t thread_id;
+	
+	/* NOTES: possible event bits are EV_READ and EV_ERROR */
+    if (revents & EV_ERROR) {
+        fprintf(stderr, "::yaircd.c:accept_connection(): unexpected EV_ERROR on server event watcher\n");
+        return;
+    }
+	
+	if (!(revents & EV_READ)) {
+		fprintf(stderr, "::yaircd.c:accept_connection(): EV_READ not present, but there was no EV_ERROR, ignoring request\n");
+		return;
+	}
+	
+	if ((thread_arguments = malloc(sizeof(struct irc_client_args_wrapper))) == NULL) {
+		fprintf(stderr, "::yaircd.c:accept_connection(): Could not allocate wrapper for new thread arguments.\n");
+		return;
+	}
+	
+	thread_arguments->address_length = sizeof(thread_arguments->address.ipv4_address);
+	thread_arguments->is_ipv6 = 0;
+	newsock_fd = accept((flags & SSL_SOCK) ? sslsock_fd : mainsock_fd, (struct sockaddr *) &thread_arguments->address.ipv4_address, &thread_arguments->address_length);
+	
+	if (newsock_fd == -1) {
+		perror("::yaircd.c:accept_connection(): Error while accepting new client connection");
+		free(thread_arguments);
+		return;
+	}
+	
+	if (thread_arguments->address.ipv4_address.sin_family != AF_INET) {
+		/* This should never happen */
+		fprintf(stderr, "::yaircd.c:accept_connection(): Invalid sockaddr_in family.\n");
+		close(newsock_fd); /* We hang up on this client, sorry! */
+		free(thread_arguments);
+		return;
+	}
+	
+	thread_arguments->socket = newsock_fd;
+	
+	if (flags & SSL_SOCK) {
+		/* Create SSL structure */
+		thread_arguments->ssl = SSL_new(ssl_context);
+		/* Assign the socket to the SSL structure */
+		SSL_set_fd(thread_arguments->ssl, newsock_fd);
+		/* SSL Handshake */
+		if (SSL_accept(thread_arguments->ssl) == -1) {
+			/* TODO Call appropriate SSL destroy funtions here */
+			fprintf(stderr, "::yaircd.c:accept_connection(): SSL Handshake failed.\n");
+			close(newsock_fd);
+			free_thread_arguments(thread_arguments);
+			return;
+		}
+	}
+	else {
+		thread_arguments->ssl = NULL;
+	}
+	
+	/* thread_arguments will be freed inside the new thread at the right time */
+	if (pthread_create(&thread_id, &thread_attr, new_client, (void *) thread_arguments) < 0) {
+		perror("::yaircd.c:accept_connection(): could not create new thread");
+		/* TODO If client is on an SSL socket, call appropriate SSL destroy funtions here */
+		close(newsock_fd);
+		free_thread_arguments(thread_arguments);
+	}
+}
+
 /** Callback function that is called when new clients arrive. It accepts the new connection and wraps the client's information in a dynamically allocated `irc_client_args_wrapper` structure to be passed to
 	`pthread_create()`. Every new client gets a dedicated thread whose starting point is `new_client()`.
 	This function returns prematurely if:
@@ -364,121 +445,23 @@ void free_thread_arguments(struct irc_client_args_wrapper *args);
 	@param revents Bit flags reported by `libev`. Can be `EV_ERROR` or `EV_READ`.
 */
 static void connection_cb(EV_P_ ev_io *w, int revents) {
-    int newsock_fd;
-	struct irc_client_args_wrapper *thread_arguments; /* Wrapper for passing arguments to thread function */
-	pthread_t thread_id;
-	
-	/* NOTES: possible event bits are EV_READ and EV_ERROR */
-    if (revents & EV_ERROR) {
-        fprintf(stderr, "::yaircd.c:connection_cb(): unexpected EV_ERROR on server event watcher\n");
-        return;
-    }
-	
-	if (!(revents & EV_READ)) {
-		fprintf(stderr, "::yaircd.c:connection_cb(): EV_READ not present, but there was no EV_ERROR, ignoring request\n");
-		return;
-	}
-	
-	newsock_fd = accept(mainsock_fd, (struct sockaddr *) &cli_addr, &clilen);
-	
-	if (newsock_fd == -1) {
-		perror("::yaircd.c:connection_cb(): Error while accepting new client connection");
-		return;
-	}
-	
-	if (cli_addr.sin_family != AF_INET) {
-		/* This should never happen */
-		fprintf(stderr, "::yaircd.c:connection_cb(): Invalid sockaddr_in family.\n");
-		close(newsock_fd); /* We hang up on this client, sorry! */
-		return;
-	}
-	
-	if ((thread_arguments = malloc(sizeof(struct irc_client_args_wrapper))) == NULL) {
-		fprintf(stderr, "::yaircd.c:connection_cb(): Could not allocate wrapper for new thread arguments.\n");
-		close(newsock_fd);
-		return;
-	}
-	if ((thread_arguments->ip_addr = strdup(inet_ntoa(cli_addr.sin_addr))) == NULL) {
-		fprintf(stderr, "::yaircd.c:connection_cb(): Could not allocate wrapper for new thread arguments.\n");
-		free(thread_arguments);
-		close(newsock_fd);
-		return;
-	}
-	
-	thread_arguments->socket = newsock_fd;
-	thread_arguments->ssl = NULL;
-	
-	/* thread_arguments will be freed inside the new thread at the right time */
-	if (pthread_create(&thread_id, &thread_attr, new_client, (void *) thread_arguments) < 0) {
-		perror("::yaircd.c:connection_cb(): could not create new thread");
-		close(newsock_fd);
-		free_thread_arguments(thread_arguments);
-	}
+	accept_connection(revents, 0);
 }
 
+/** Callback function that is called when new SSL clients arrive. It accepts the new connection and wraps the client's information in a dynamically allocated `irc_client_args_wrapper` structure to be passed to
+	`pthread_create()`. Every new client gets a dedicated thread whose starting point is `new_client()`.
+	This function returns prematurely if:
+		<ul>
+			<li>an `EV_ERROR` occurred, or `EV_READ` was not set for some reason;</li>
+			<li>`accept()` returned an error code and no socket could be created;</li>
+			<li>the client address is malformed, namely, its family is not `AF_INET`;</li>
+			<li>the operating system reports that no thread could be created.</li>
+		</ul>
+	@param w The watcher that caused this callback to execute. Always comes from the main default loop.
+	@param revents Bit flags reported by `libev`. Can be `EV_ERROR` or `EV_READ`.
+*/
 static void ssl_connection_cb(EV_P_ ev_io *w, int revents) {
-    int newsock_fd;
-	struct irc_client_args_wrapper *thread_arguments; /* Wrapper for passing arguments to thread function */
-	pthread_t thread_id;
-	
-	/* NOTES: possible event bits are EV_READ and EV_ERROR */
-    if (revents & EV_ERROR) {
-        fprintf(stderr, "::yaircd.c:ssl_connection_cb(): unexpected EV_ERROR on server event watcher\n");
-        return;
-    }
-	
-	if (!(revents & EV_READ)) {
-		fprintf(stderr, "::yaircd.c:ssl_connection_cb(): EV_READ not present, but there was no EV_ERROR, ignoring request\n");
-		return;
-	}
-	
-	newsock_fd = accept(sslsock_fd, (struct sockaddr *) &cli_addr, &clilen);
-	
-	if (newsock_fd == -1) {
-		perror("::yaircd.c:ssl_connection_cb(): Error while accepting new client connection");
-		return;
-	}
-	
-	if (cli_addr.sin_family != AF_INET) {
-		/* This should never happen */
-		fprintf(stderr, "::yaircd.c:ssl_connection_cb(): Invalid sockaddr_in family.\n");
-		close(newsock_fd); /* We hang up on this client, sorry! */
-		return;
-	}
-	
-	if ((thread_arguments = malloc(sizeof(struct irc_client_args_wrapper))) == NULL) {
-		fprintf(stderr, "::yaircd.c:ssl_connection_cb(): Could not allocate wrapper for new thread arguments.\n");
-		close(newsock_fd);
-		return;
-	}
-	if ((thread_arguments->ip_addr = strdup(inet_ntoa(cli_addr.sin_addr))) == NULL) {
-		fprintf(stderr, "::yaircd.c:ssl_connection_cb(): Could not allocate wrapper for new thread arguments.\n");
-		free(thread_arguments);
-		close(newsock_fd);
-		return;
-	}
-	
-	thread_arguments->socket = newsock_fd;
-	
-	/*SSL structure is created */
-    thread_arguments->ssl = SSL_new(ssl_context);
-    
-    /*Assign the socket into the SSL structure */
-    SSL_set_fd(thread_arguments->ssl, newsock_fd);
-    
-    /*SSL Handshake on the SSL server */
-     if(SSL_accept(thread_arguments->ssl)==-1){
-		fprintf(stderr, "::yaircd.c:ssl_connection_cb(): SSL Handshake with client at %s failed.\n", thread_arguments->ip_addr);
-		close(newsock_fd);
-		free_thread_arguments(thread_arguments);
-	 }
-	
-	/* thread_arguments will be freed inside the new thread at the right time */
-	if (pthread_create(&thread_id, &thread_attr, new_client, (void *) thread_arguments) < 0) {
-		perror("::yaircd.c:connection_cb(): could not create new thread");
-		close(newsock_fd);
-		free_thread_arguments(thread_arguments);
-	}
+	accept_connection(revents, SSL_SOCK);
 }
 
 /** This is called by a client thread everytime its arguments structure is not needed anymore.
@@ -489,6 +472,5 @@ void free_thread_arguments(struct irc_client_args_wrapper *args) {
 		//SSL_shutdown(args->ssl);
 		//SSL_free(args->ssl);
 	//}
-	free(args->ip_addr);
 	free(args);
 }

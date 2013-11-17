@@ -1,6 +1,9 @@
 #ifndef __IRC_YAIRCD_GUARD__
 #define __IRC_YAIRCD_GUARD__
 
+#define IPv6_SOCK 0x1
+#define SSL_SOCK 0x2
+
 struct server_info {
 	int id;
 	const char * name;

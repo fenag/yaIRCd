@@ -55,7 +55,7 @@ inline ssize_t read_from_noerr(struct irc_client *client, char *buf, size_t len)
 	@warning Always check to make sure that the number of formatters match the number of optional parameters passed. GCC will not issue a warning as it would for printf, because this is not part of the standard library.
 	@warning It is assumed that the code using this function is well behaved; in particular, it is assumed that `fmt` is well formed, and that a `%` is always followed by an `s`, because only `%s` is supported.
 */
-static void yaircd_send(struct irc_client *client, const char *fmt, ...) {
+void yaircd_send(struct irc_client *client, const char *fmt, ...) {
 	const char *ptr;
 	char *str;
 	char buffer[MAX_MSG_SIZE+1];

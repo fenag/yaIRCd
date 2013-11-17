@@ -1,7 +1,6 @@
 #ifndef __PARSEMSG_GUARD__
 #define __PARSEMSG_GUARD__
 #include "protocol.h"
-#include "client.h"
 
 /** @file
 	@brief IRC Messages parser
@@ -35,6 +34,7 @@ struct irc_message {
 	int msg_begin; /**<Index that denotes the position in `msg` where the current message begins. There can be old messages behind which were already reported. Anything behind `msg_begin` is trash. */
 };
 
+struct irc_client;
 /* Documented in parsemsg.c */
 void initialize_irc_message(struct irc_message *in);
 void read_data(struct irc_client *client);

@@ -194,7 +194,7 @@ static void bring_to_top(char *to, char *buf, int length) {
 	The function shall be called again if it is known that there is more data in the socket to parse, but only after calling `next_msg()` to free some space in the buffer.
 */
 void read_data(struct irc_client *client) {
-	struct irc_message *client_msg = client->last_msg;
+	struct irc_message *client_msg = &client->last_msg;
 	if (sizeof(client_msg->msg) <= client_msg->index) {
 		/* If we get here, it means we have read a characters sequence of at least MAX_MSG_SIZE length without finding
 		   the message terminators \r\n. A lame client is messing around with the server. Reset the message buffer and log

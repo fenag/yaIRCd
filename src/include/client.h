@@ -2,7 +2,9 @@
 #define __IRC_CLIENT_GUARD__
 #include <ev.h>
 #include <openssl/ssl.h>
+#include <netinet/in.h>
 #include "client_queue.h"
+#include "parsemsg.h"
 
 /** @file
 	@brief Functions that deal with irc clients
@@ -27,7 +29,7 @@ struct irc_client {
 	char *nick; /**<nickname */
 	char *username; /**<ident field */
 	char *server; /**<this client's server ip address. `NULL` if it's a local client. */
-	struct irc_message *last_msg; /**<last IRC message received coming from this client. This structure will be filled as we read this client's socket, and when an entire message is finished reading, this structure will contain the necessary information. */
+	struct irc_message last_msg; /**<last IRC message received coming from this client. This structure will be filled as we read this client's socket, and when an entire message is finished reading, this structure will contain the necessary information. */
 	unsigned is_registered : 1; /**<bit field indicating if this client has registered his connection. */
 	unsigned uses_ssl : 1; /**<bit field indicating if this client is using a secure connection. */
 	int socket_fd; /**<the socket descriptor used to communicate with this client. */
@@ -39,8 +41,14 @@ struct irc_client {
 */
 struct irc_client_args_wrapper {
 	int socket; /**<socket file descriptor for the new connection. Typically, this is the return value from `accept()` */
-	char *ip_addr; /**<the new client's ip address */
-	SSL *ssl; /**<main SSL structure, created per establish connection*/
+	/** A union holding the sockaddr structure for the new connection. Current versions only support IPv4, but this will make it easy to extend to IPv6 */
+	union {
+		struct sockaddr_in ipv4_address; /**<If this is a client on IPv4, we will store a `struct sockaddr_in` */
+		struct sockaddr_in6 ipv6_address; /**<If this is a client on IPv6, we will store a `struct sockaddr_in6` */
+	} address;
+	socklen_t address_length; /**<Length of the sockaddr attribute in use */
+	unsigned is_ipv6 : 1; /**<Bit-field indicating if this is an IPv6 connection. This field is used to remember what the union is holding. */
+	SSL *ssl; /**<main SSL structure for secure connected clients */
 };
 
 /* Documented in client.c */		

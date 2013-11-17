@@ -33,6 +33,7 @@
 #define read_from(client,buf,len) ((client)->uses_ssl ? SSL_read((client)->ssl, (buf), (len)) : recv((client)->socket_fd, (buf), (len), 0))
 
 /* Functions documented in the source file */
+void yaircd_send(struct irc_client *client, const char *fmt, ...);
 void send_err_notregistered(struct irc_client *client);
 void send_err_unknowncommand(struct irc_client *client, char *cmd);
 void send_err_nonicknamegiven(struct irc_client *client);
