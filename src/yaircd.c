@@ -412,7 +412,8 @@ static void accept_connection(int revents, int flags) {
 		SSL_set_fd(thread_arguments->ssl, newsock_fd);
 		/* SSL Handshake */
 		if (SSL_accept(thread_arguments->ssl) == -1) {
-			/* TODO Call appropriate SSL destroy funtions here */
+			SSL_shutdown(thread_arguments->ssl);
+			SSL_free(thread_arguments->ssl);
 			fprintf(stderr, "::yaircd.c:accept_connection(): SSL Handshake failed.\n");
 			close(newsock_fd);
 			free_thread_arguments(thread_arguments);
@@ -426,7 +427,10 @@ static void accept_connection(int revents, int flags) {
 	/* thread_arguments will be freed inside the new thread at the right time */
 	if (pthread_create(&thread_id, &thread_attr, new_client, (void *) thread_arguments) < 0) {
 		perror("::yaircd.c:accept_connection(): could not create new thread");
-		/* TODO If client is on an SSL socket, call appropriate SSL destroy funtions here */
+		if(flags & SSL_SOCK){
+			SSL_shutdown(thread_arguments->ssl);
+			SSL_free(thread_arguments->ssl);
+		}
 		close(newsock_fd);
 		free_thread_arguments(thread_arguments);
 	}
@@ -468,9 +472,5 @@ static void ssl_connection_cb(EV_P_ ev_io *w, int revents) {
 	@param args A pointer to the arguments structure that was passed to the thread's initialization function.
 */
 void free_thread_arguments(struct irc_client_args_wrapper *args) {
-	//if(args->ssl){
-		//SSL_shutdown(args->ssl);
-		//SSL_free(args->ssl);
-	//}
 	free(args);
 }
