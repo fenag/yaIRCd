@@ -6,10 +6,10 @@ CC = gcc
 CFLAGS = -o $(BINARY_NAME) -Wall
 INCLUDES = -Iinclude
 LIBS = -lpthread -lev -lssl -lcrypto -lconfig
-COMPILE = $(CC) $(CFLAGS) $(INCLUDES) $(LIBS)
+COMPILE = $(CC) $(CFLAGS) $(INCLUDES) 
 
 all: $(FILES)
-	$(COMPILE) $(FILES)
+	$(COMPILE) $(FILES) $(LIBS)
 
 doc:
 	doxygen $(DOXYGEN_CONFIG_PATH)
