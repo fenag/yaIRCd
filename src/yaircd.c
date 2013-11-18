@@ -68,15 +68,13 @@
 	@author Fabio Ribeiro
 	@date November 2013
 	@todo See how to daemonize properly. Read http://www-theorie.physik.unizh.ch/~dpotter/howto/daemonize
-	@todo Think about adding configuration file support (.conf)
-	@todo Allow to bind for multiple IPs
 */
 
 
 static int mainsock_fd; /**<Main socket file descriptor, where new insecure connection request arrive */
 static int sslsock_fd; /**<SSL socket file descriptor, where new secure connection request arrive */
-static struct sockaddr_in serv_addr; /**<This node's address, namely, the IP and port where we will be listening for new connections. */
-static struct sockaddr_in ssl_addr;
+static struct sockaddr_in serv_addr; /**<This node's address, namely, the IP and port where we will be listening for new standard connections. */
+static struct sockaddr_in ssl_addr; /**<This node's address, namely, the IP and port where we will be listening for new secure connections. */
 static pthread_attr_t thread_attr; /**<Threads creation attributes. We use detached threads, since we're not interested in calling `pthread_join()`. */
 
 static const SSL_METHOD *ssl_method;
@@ -88,13 +86,22 @@ static void ssl_connection_cb(EV_P_ ev_io *w, int revents);
 static struct server_info * info;
 static config_t cfg;
 
+/**
+ * Using libconfig, this function creates and populates a struct, which is going to hold information about the chosen
+ * configuration for this server. If one changes CONFIG_FILE content, this is the only function, apart of the 
+ * "struct server_info" in the header file, one needs to adapt.
+ * 
+ * @warning if you need to mess around with this function, you better take a look at libconfig documentation:
+ * 			http://www.hyperrealm.com/libconfig/libconfig_manual.html
+ * @return `1` on error; `0` otherwise 
+ */
 int loadServerInfo(){
 	config_setting_t *setting;
 	
 	config_init(&cfg);
 	
 	/* Read the configuration file, and check if it was successful*/
-	if(! config_read_file(&cfg, "yaircd.conf")){
+	if(! config_read_file(&cfg, CONFIG_FILE)){
 		perror("::yaircd.c:main(): Server unable to read configuration file.");
 		
 		//debug
@@ -149,6 +156,12 @@ int loadServerInfo(){
 	return 0;
 }
 
+/**
+ * This is where the mem allocated during the load of the configuration file is freed. You might have noticed
+ * we didn't use any buffer while calling config_setting_lookup_TYPE. This means that if you call this function
+ * too soon, you might come across a mean, still beautiful, segmentation fault (just if you try to access the info
+ * contained in the struct we have populated during the loadServerInfo() call).
+ */
 void freeServerInfo(){
 	config_destroy(&cfg);
 } 
