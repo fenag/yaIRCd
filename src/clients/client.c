@@ -16,6 +16,7 @@
 #include "parsemsg.h"
 #include "msgio.h"
 #include "interpretmsg.h"
+#include "cloak.h"
 
 /** @file
 	@brief Implementation of functions that deal with irc clients
@@ -188,6 +189,7 @@ static struct irc_client *create_client(struct irc_client_args_wrapper *args) {
 				free_thread_arguments(args);
 				return NULL;
 			}
+			new_client->host_reversed = 0;
 			if ((new_client->hostname = strdup(ip)) == NULL) {
 				ev_loop_destroy(new_client->ev_loop);
 				free(new_client);
@@ -197,12 +199,20 @@ static struct irc_client *create_client(struct irc_client_args_wrapper *args) {
 		}
 		else {
 			yaircd_send(new_client, ":development.yaircd.org NOTICE AUTH :*** Found your hostname.\r\n");
+			new_client->host_reversed = 1;
 			if ((new_client->hostname = strdup(hostbuf)) == NULL) {
 				ev_loop_destroy(new_client->ev_loop);
 				free(new_client);
 				free_thread_arguments(args);
 				return NULL;
 			}
+		}
+		if ((new_client->public_host = hide_userhost(new_client)) == NULL) {
+			free(new_client->hostname);
+			ev_loop_destroy(new_client->ev_loop);
+			free(new_client);
+			free_thread_arguments(args);
+			return NULL;
 		}
 	}
 	free_thread_arguments(args);

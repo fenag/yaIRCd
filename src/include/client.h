@@ -26,12 +26,14 @@ struct irc_client {
 	struct msg_queue write_queue; /**<Write queue that holds messages waiting to be sent. @see client_queue.h */
 	char *realname; /**<GECOS field. */
 	char *hostname; /**<reverse looked up hostname, or the IP address if no reverse is available. */
+	char *public_host; /**<cloaked hostname for this client. This is the address shown to other regular users, so that a client's address is kept private. */
 	char *nick; /**<nickname */
 	char *username; /**<ident field */
 	char *server; /**<this client's server ip address. `NULL` if it's a local client. */
 	struct irc_message last_msg; /**<last IRC message received coming from this client. This structure will be filled as we read this client's socket, and when an entire message is finished reading, this structure will contain the necessary information. */
 	unsigned is_registered : 1; /**<bit field indicating if this client has registered his connection. */
 	unsigned uses_ssl : 1; /**<bit field indicating if this client is using a secure connection. */
+	unsigned host_reversed : 1; /**<bit field indicating if we were able to reverse lookup this client's IP address. If this field is not set, then `hostname` holds an IP address, otherwise, a hostname. */
 	int socket_fd; /**<the socket descriptor used to communicate with this client. */
 	SSL *ssl; /**<main SSL structure, created per establish connection. */
 };
