@@ -1,6 +1,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include "protocol.h"
 #include "msgio.h"
 #include "interpretmsg.h"
@@ -22,6 +23,22 @@
 	@todo Commands are now recognized by serial comparison. Discuss if a trie approach is benefitial.
 */
 
+
+static inline int cmd_print_reply(char *buf, size_t size, char *msg, ...) {
+	int ret;
+	va_list args;
+	va_start(args, msg);
+	ret = vsnprintf(buf, size, msg, args);
+	va_end(args);
+	if (ret >= size) {
+		buf[size-1] = '\n';
+		buf[size-2] = '\r';
+		ret = size;
+	}
+	return ret;
+}
+
+
 /**
 	msgto = channel / ( user [ "%" host ] "@" servername )
 	msgto =/ (user "%" host ) / targetmask
@@ -33,6 +50,20 @@ static void *privmsg_cmd(struct irc_client *target, void *args) {
 	snprintf(message, sizeof(message), ":%s!%s@%s PRIVMSG %s :%s\r\n", info->from->nick, info->from->username, info->from->hostname, info->params[0], info->params[1]);
 	client_enqueue(&target->write_queue, message);
 	ev_async_send(target->ev_loop, &target->async_watcher);
+	return NULL;
+}
+
+static void *whois_cmd(struct irc_client *target, void *args) {
+	struct cmd_parse *info = (struct cmd_parse *) args;
+	char message[MAX_MSG_SIZE+1];
+	int length;
+	length = cmd_print_reply(message, sizeof(message), ":development.yaircd.org " RPL_WHOISUSER " %s %s %s %s * :%s\r\n", info->from->nick, target->nick, target->username, target->public_host, target->realname);
+	(void) write_to(info->from, message, length);
+	length = cmd_print_reply(message, sizeof(message), ":development.yaircd.org " RPL_WHOISSERVER " %s %s %s :%s\r\n", info->from->nick, target->nick, "development.yaircd.org", "I will find you, and I will kill you!");
+	(void) write_to(info->from, message, length);
+	/* TODO Implement RPL_WHOISIDLE and RPL_WHOISCHANNELS */
+	length = cmd_print_reply(message, sizeof(message), ":development.yaircd.org " RPL_ENDOFWHOIS " %s %s :End of WHOIS list\r\n", info->from->nick, target->nick);
+	(void) write_to(info->from, message, length);
 	return NULL;
 }
 
@@ -131,6 +162,21 @@ int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *para
 			wrapper.params = params;
 			wrapper.params_size = params_size;
 			(void) client_list_find_and_execute(params[0], privmsg_cmd, (void *) &wrapper, &status);
+			if (status == 0) {
+				send_err_nosuchnick(client, params[0]);
+			}
+		}
+		if (strcasecmp(cmd, ==, "whois")) {
+			if (params_size == 0) {
+				send_err_nonicknamegiven(client);
+				return 0;
+			}
+			wrapper.from = client;
+			wrapper.prefix = prefix;
+			wrapper.cmd = cmd;
+			wrapper.params = params;
+			wrapper.params_size = params_size;
+			(void) client_list_find_and_execute(params[0], whois_cmd, (void *) &wrapper, &status);
 			if (status == 0) {
 				send_err_nosuchnick(client, params[0]);
 			}

@@ -124,7 +124,7 @@ void send_err_unknowncommand(struct irc_client *client, char *cmd) {
 */
 void send_err_nonicknamegiven(struct irc_client *client) {
 	char *format =
-		":%s" ERR_NONICKNAMEGIVEN " %s :No nickname given\r\n";
+		":%s " ERR_NONICKNAMEGIVEN " %s :No nickname given\r\n";
 	yaircd_send(client, format,
 		"development.yaircd.org", client->is_registered ? client->nick : "*");
 }
