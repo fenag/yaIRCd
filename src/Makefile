@@ -6,7 +6,7 @@ CC = gcc
 CFLAGS = -o $(BINARY_NAME) -Wall
 INCLUDES = -Iinclude
 LIBS = -lpthread -lev -lssl -lcrypto -lconfig
-COMPILE = $(CC) $(CFLAGS) $(INCLUDES)
+COMPILE = $(CC) $(CFLAGS) $(INCLUDES) 
 
 all: $(FILES)
 	$(COMPILE) $(FILES) $(LIBS)
