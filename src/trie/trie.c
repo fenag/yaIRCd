@@ -87,7 +87,7 @@ static inline void free_child(struct trie_node *node, unsigned char pos) {
 /** Recursively frees every node reachable from `node`.
 	@param node The top node (in the beginning, most likely the root node).
 	@param trie A trie, as returned by `init_trie()`.
-	@param free_data `FLAG_FREE_DATA` if the free function stored in `trie` shall be used to free each node's data, `FLAG_NO_FREE_DATA` otherwise
+	@param free_data `TRIE_FREE_DATA` if the free function stored in `trie` shall be used to free each node's data, `TRIE_NO_FREE_DATA` otherwise
 */
 static void destroy_aux(struct trie_node *node, struct trie_t *trie, int free_data) {
 	int i;
@@ -96,7 +96,7 @@ static void destroy_aux(struct trie_node *node, struct trie_t *trie, int free_da
 			destroy_aux(node->edges[i], trie, free_data);
 		}
 	}
-	if (free_data == FLAG_FREE_DATA) {
+	if (free_data == TRIE_FREE_DATA) {
 		(*trie->free_f)(node->data);
 	}
 	free(node->edges);
@@ -105,7 +105,7 @@ static void destroy_aux(struct trie_node *node, struct trie_t *trie, int free_da
 
 /** Frees every allocated storage for a trie.
 	@param trie A trie, as returned by `init_trie()`.
-	@param free_data `FLAG_FREE_DATA` if the free function stored in `trie` shall be used to free each node's data, `FLAG_NO_FREE_DATA` otherwise
+	@param free_data `TRIE_FREE_DATA` if the free function stored in `trie` shall be used to free each node's data, `TRIE_NO_FREE_DATA` otherwise
 */
 void destroy_trie(struct trie_t *trie, int free_data) {
 	destroy_aux(trie->root, trie, free_data);

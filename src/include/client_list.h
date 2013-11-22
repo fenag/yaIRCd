@@ -25,8 +25,8 @@
 /* Documented in client_list.c */
 int client_list_init(void);
 void client_list_destroy(void);
-void *client_list_find_and_execute(char *nick, void *(*f)(struct irc_client *client, void *args), void *fargs, int *success);
-int client_list_add(struct irc_client *new_client, char *newnick);
+void *client_list_find_and_execute(char *nick, void *(*f)(void *, void *), void *fargs, int *success);
+int client_list_add(struct irc_client *client, char *newnick);
 void client_list_delete(struct irc_client *client);
 
 #endif /* __IRC_CLIENT_LIST_GUARD__ */

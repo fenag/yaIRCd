@@ -44,8 +44,9 @@ static inline int cmd_print_reply(char *buf, size_t size, char *msg, ...) {
 	msgto =/ (user "%" host ) / targetmask
 	msgto =/ nickname / ( nickname "!" user "@" host )
 */
-static void *privmsg_cmd(struct irc_client *target, void *args) {
+static void *privmsg_cmd(void *target_client, void *args) {
 	struct cmd_parse *info = (struct cmd_parse *) args;
+	struct irc_client *target = (struct irc_client *) target_client;
 	char message[MAX_MSG_SIZE+1];
 	snprintf(message, sizeof(message), ":%s!%s@%s PRIVMSG %s :%s\r\n", info->from->nick, info->from->username, info->from->hostname, info->params[0], info->params[1]);
 	client_enqueue(&target->write_queue, message);
@@ -53,8 +54,9 @@ static void *privmsg_cmd(struct irc_client *target, void *args) {
 	return NULL;
 }
 
-static void *whois_cmd(struct irc_client *target, void *args) {
+static void *whois_cmd(void *target_client, void *args) {
 	struct cmd_parse *info = (struct cmd_parse *) args;
+	struct irc_client *target = (struct irc_client *) target_client;
 	char message[MAX_MSG_SIZE+1];
 	int length;
 	length = cmd_print_reply(message, sizeof(message), ":development.yaircd.org " RPL_WHOISUSER " %s %s %s %s * :%s\r\n", info->from->nick, target->nick, target->username, target->public_host, target->realname);

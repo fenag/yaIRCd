@@ -30,12 +30,12 @@
 /** Flag that indicates that a node's data is to be freed when it is about to be destroyed. 
 	@see destroy_trie()
 */
-#define FLAG_FREE_DATA 1
+#define TRIE_FREE_DATA 1
 
 /** Flag that indicates that a node's data shall not be freed when it is about to be destroyed. 
 	@see destroy_trie()
 */
-#define FLAG_NO_FREE_DATA 0
+#define TRIE_NO_FREE_DATA 0
 
 /** A node in a trie. */
 struct trie_node {
