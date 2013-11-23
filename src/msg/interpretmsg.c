@@ -33,10 +33,7 @@
 static void *privmsg_cmd(void *target_client, void *args) {
 	struct cmd_parse *info = (struct cmd_parse *) args;
 	struct irc_client *target = (struct irc_client *) target_client;
-	char message[MAX_MSG_SIZE+1];
-	snprintf(message, sizeof(message), ":%s!%s@%s PRIVMSG %s :%s\r\n", info->from->nick, info->from->username, info->from->hostname, info->params[0], info->params[1]);
-	client_enqueue(&target->write_queue, message);
-	ev_async_send(target->ev_loop, &target->async_watcher);
+	notify_privmsg(info->from, target, target->nick, info->params[1]);
 	return NULL;
 }
 
@@ -149,9 +146,17 @@ int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *para
 			wrapper.cmd = cmd;
 			wrapper.params = params;
 			wrapper.params_size = params_size;
-			(void) client_list_find_and_execute(params[0], privmsg_cmd, (void *) &wrapper, &status);
-			if (status == 0) {
-				send_err_nosuchnick(client, params[0]);
+			if (*params[0] == '#') {
+				if (channel_msg(client, params[0], params[1]) == CHAN_NO_SUCH_CHANNEL) {
+					send_err_nosuchnick(client, params[0]);
+				}
+				return 0;
+			} else {
+				(void) client_list_find_and_execute(params[0], privmsg_cmd, (void *) &wrapper, &status);
+				if (status == 0) {
+					send_err_nosuchnick(client, params[0]);
+				}
+				return 0;
 			}
 		}
 		if (strcasecmp(cmd, ==, "whois")) {

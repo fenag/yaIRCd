@@ -238,6 +238,22 @@ void *find_word_trie(struct trie_t *trie, char *word) {
 	return find_word_trie_aux(trie->root, word, trie);
 }
 
+static void trie_for_each_aux(struct trie_t *trie, struct trie_node *node, void (*f)(void *, void *), void *fargs) {
+	int i;
+	if (node->is_word) {
+		(*f)(node->data, fargs);
+	}
+	for (i = 0; i < trie->edges_no; i++) {
+		if (node->edges[i] != NULL) {
+			trie_for_each_aux(trie, node->edges[i], f, fargs);
+		}
+	}
+}
+
+void trie_for_each(struct trie_t *trie, void (*f)(void *, void *), void *fargs) {
+	trie_for_each_aux(trie, trie->root, f, fargs);
+}
+
 /** Pops an element off the stack that represents an on going search by prefix.
 	@param st The stack.
 	@return Element at the top of the stack.

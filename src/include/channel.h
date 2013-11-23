@@ -10,6 +10,9 @@
 /** Returned by `do_part()` when a user attempts to part a channel he's not in */
 #define CHAN_NOT_ON_CHANNEL 3
 
+/** Used to report when someone attempts to perform an action in a channel that does not exist */
+#define CHAN_NO_SUCH_CHANNEL 4
+
 /** Opaque type for a channelused by the rest of the code */
 typedef struct irc_channel *irc_channel_ptr;
 
@@ -18,5 +21,6 @@ int chan_init(void);
 void chan_destroy(void);
 int do_join(struct irc_client *client, char *channel);
 int do_part(struct irc_client *client, char *channel, char *part_msg);
+int channel_msg(struct irc_client *from, char *channel, char *msg);
 
 #endif /* __YAIRCD_CHANNEL_GUARD__ */

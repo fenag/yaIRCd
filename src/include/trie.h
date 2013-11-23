@@ -77,6 +77,7 @@ void destroy_trie(struct trie_t *trie, int free_data, void *args);
 int add_word_trie(struct trie_t *trie, char *word, void *data);
 void *delete_word_trie(struct trie_t *trie, char *word);
 void *find_word_trie(struct trie_t *trie, char *word);
+void trie_for_each(struct trie_t *trie, void (*f)(void *, void *), void *args);
 struct trie_node_stack *find_by_prefix_next_trie(struct trie_t *trie, struct trie_node_stack *st, const char *prefix, int depth, char *result, int *err_code, void **data);
 void free_trie_stack(struct trie_node_stack *st);
 #endif /* TRIE_GUARD */

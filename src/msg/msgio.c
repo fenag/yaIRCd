@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <openssl/ssl.h>
 #include <stdarg.h>
+#include <ev.h>
 #include "protocol.h"
 #include "msgio.h"
 #include "wrappers.h"
@@ -95,7 +96,7 @@ void yaircd_send(struct irc_client *client, const char *fmt, ...) {
 	}
 }
 
-int cmd_print_reply(char *buf, size_t size, char *msg, ...) {
+int cmd_print_reply(char *buf, size_t size, const char *msg, ...) {
 	int ret;
 	va_list args;
 	va_start(args, msg);
@@ -283,6 +284,15 @@ void send_err_notonchannel(struct irc_client *client, char *chan) {
 		":%s " ERR_NOTONCHANNEL " %s %s :You're not on that channel\r\n";
 	yaircd_send(client, format,
 		"development.yaircd.org", client->nick, chan);
+}
+
+void notify_privmsg(struct irc_client *from, struct irc_client *to, char *dest, char *msg) {
+	char message[MAX_MSG_SIZE+1];
+	const char *format =
+		":%s!%s@%s PRIVMSG %s :%s\r\n";
+	cmd_print_reply(message, sizeof(message), format, from->nick, from->username, from->realname, dest, msg);
+	client_enqueue(&to->write_queue, message);
+	ev_async_send(to->ev_loop, &to->async_watcher);
 }
 
 /** Function used when a client wants to flush his messages write queue.
