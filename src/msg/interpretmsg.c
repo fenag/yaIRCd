@@ -197,6 +197,25 @@ int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *para
 					break;
 			}
 		}
+		if (strcasecmp(cmd, ==, "part")) {
+			/* 
+				ERR_NEEDMOREPARAMS
+				ERR_NOTONCHANNEL
+				ERR_NOSUCHCHANNEL
+			*/
+			if (params_size < 1) {
+				send_err_needmoreparams(client, cmd);
+				return 0;
+			}
+			switch (do_part(client, params[0], params_size > 1 ? params[1] : client->nick)) {
+				case CHAN_INVALID_NAME:
+					send_err_nosuchchannel(client, params[0]);
+					break;
+				case CHAN_NOT_ON_CHANNEL:
+					send_err_notonchannel(client, params[0]);
+					break;
+			}
+		}
 		/* ... */
 		return 0;
 	}

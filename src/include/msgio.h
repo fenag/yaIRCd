@@ -48,6 +48,7 @@ void send_err_norecipient(struct irc_client *client, char *cmd);
 void send_err_notexttosend(struct irc_client *client);
 void send_err_nosuchnick(struct irc_client *client, char *nick);
 void send_err_nosuchchannel(struct irc_client *client, char *chan);
+void send_err_notonchannel(struct irc_client *client, char *chan);
 inline void msg_flush(char *message, void *arg);
 inline void write_to_noerr(struct irc_client *client, char *buf, size_t len);
 inline ssize_t read_from_noerr(struct irc_client *client, char *buf, size_t len);

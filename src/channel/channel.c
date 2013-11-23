@@ -1,10 +1,12 @@
 #include <pthread.h>
 #include <limits.h>
+#include <ev.h>
 #include "trie.h"
 #include "list.h"
 #include "client_list.h"
 #include "channel.h"
 #include "msgio.h"
+#include "client_queue.h"
 
 /** A constant denoting the number of different characters allowed in a channel name.
 	Since only 7 characters are not allowed, we chose to map every character and include this
@@ -34,6 +36,7 @@ struct irc_channel_wrapper {
 	Word_list_ptr chan_list;
 	struct irc_client *client; /**<Original client where the request came from */
 	char *channel; /**<Channel name */
+	char *partmsg; /**<Part message, if it was a part command */
 };
 
 /**Global channels list for the whole network */
@@ -81,6 +84,20 @@ void chan_destroy(void) {
 	destroy_word_list(channels, LIST_NO_FREE_NODE_DATA);
 }
 
+static void notify_join(struct irc_client *to_notify, struct irc_client *user_joined, irc_channel_ptr chan) {
+	char message[MAX_MSG_SIZE+1];
+	(void) cmd_print_reply(message, sizeof(message), ":%s!%s@%s JOIN %s\r\n", user_joined->nick, user_joined->username, user_joined->public_host, chan->name);
+	client_enqueue(&to_notify->write_queue, message);
+	ev_async_send(to_notify->ev_loop, &to_notify->async_watcher);
+}
+
+static void notify_part(struct irc_client *to_notify, struct irc_client *user_parted, irc_channel_ptr chan, char *part_msg) {
+	char message[MAX_MSG_SIZE+1];
+	(void) cmd_print_reply(message, sizeof(message), ":%s!%s@%s PART %s :%s\r\n", user_parted->nick, user_parted->username, user_parted->public_host, chan->name, part_msg);
+	client_enqueue(&to_notify->write_queue, message);
+	ev_async_send(to_notify->ev_loop, &to_notify->async_watcher);
+}
+
 static void join_ack(struct irc_client *client, irc_channel_ptr chan) {
 	char msg[MAX_MSG_SIZE+1];
 	char nick[MAX_NICK_LENGTH+1];
@@ -111,6 +128,9 @@ static void join_ack(struct irc_client *client, irc_channel_ptr chan) {
 		size = cmd_print_reply(msg, sizeof(msg),
 			":%s " RPL_NAMREPLY " %s = %s :%s!%s@%s\r\n", "development.yaircd.org", client->nick, chan->name, chanuser->user->nick, chanuser->user->username, chanuser->user->public_host);
 		(void) write_to(client, msg, size);
+		if (chanuser->user != client) {
+			notify_join(chanuser->user, client, chan);
+		}
 	}
 	
 	size = cmd_print_reply(msg, sizeof(msg),
@@ -162,6 +182,27 @@ static void *join_newchan(void *args) {
 	return (void *) new_chan;
 }
 
+static void *join_existingchan(void *channel, void *args) {
+	struct irc_channel_wrapper *info;
+	struct chan_user *new_user;
+	irc_channel_ptr chan;
+	
+	info = (struct irc_channel_wrapper *) args;
+	chan = (irc_channel_ptr) channel;
+	if ((new_user = malloc(sizeof(*new_user))) == NULL) {
+		return NULL;
+	}
+	new_user->modes = 0;
+	new_user->user = info->client;
+	if (add_word_trie(chan->users, info->client->nick, (void *) new_user) == TRIE_NO_MEM) {
+		free(new_user);
+		return NULL;
+	}
+	join_ack(info->client, chan);
+	chan->users_count++;
+	return (void *) new_user;
+}
+
 int do_join(struct irc_client *client, char *channel) {
 	/* TODO - Check if channel name is valid */
 	struct irc_channel_wrapper args;
@@ -171,9 +212,66 @@ int do_join(struct irc_client *client, char *channel) {
 	args.chan_list = channels;
 	args.client = client;
 	args.channel = channel;
-	ret = list_find_and_execute_globalock(channels, channel, NULL, join_newchan, NULL, (void *) &args, &result);
+	ret = list_find_and_execute_globalock(channels, channel, join_existingchan, join_newchan, (void *) &args, (void *) &args, &result);
 	if (ret == NULL) {
 		return CHAN_NO_MEM;
+	}
+	return 0;
+}
+
+static void destroy_channel(irc_channel_ptr chan) {
+	(void) list_delete_nolock(channels, chan->name);
+	free(chan->name);
+	/*free(chan->topic);*/
+	destroy_trie(chan->users, TRIE_NO_FREE_DATA, NULL);
+	free(chan);
+}
+
+static void *part_channel(void *channel, void *args) {
+	char nick[MAX_NICK_LENGTH+1];
+	int err_code;
+	irc_channel_ptr chan;
+	struct irc_channel_wrapper *info;
+	struct trie_node_stack *search_info;
+	struct chan_user *chanuser;
+	void *user;
+	
+	info = (struct irc_channel_wrapper *) args;
+	chan = (irc_channel_ptr) channel;
+	if ((user = delete_word_trie(chan->users, info->client->nick)) == NULL) {
+		return NULL;
+	}
+	free(user);	
+	for (search_info = find_by_prefix_next_trie(chan->users, NULL, "", MAX_NICK_LENGTH+1, nick, &err_code, &user);
+		 search_info != NULL;
+		 search_info = find_by_prefix_next_trie(chan->users, search_info, "", MAX_NICK_LENGTH+1, nick, &err_code, &user)) {
+		if (err_code == TRIE_NO_MEM) {
+			fprintf(stderr, "::channel.c:part_channel(): TRIE_NO_MEM occurred when listing channel users.\n");
+			continue;
+		}
+		chanuser = (struct chan_user *) user;
+		notify_part(chanuser->user, info->client, chan, info->partmsg);
+	}
+	if (--chan->users_count == 0) {
+		/* Channel empty, clear up */
+		destroy_channel(chan);
+	}
+	return args;
+}
+
+int do_part(struct irc_client *client, char *channel, char *part_msg) {
+	/* TODO - Check if channel name is valid */
+	struct irc_channel_wrapper args;
+	int result;
+	void *ret;
+	args.chan_list = channels;
+	args.client = client;
+	args.channel = channel;
+	args.partmsg = part_msg;
+	ret = list_find_and_execute_globalock(channels, channel, part_channel, NULL, (void *) &args, NULL, &result);
+	if (result != 0 && ret == NULL) {
+		/* Attempted to part a channel he's not in */
+		return CHAN_NOT_ON_CHANNEL;
 	}
 	return 0;
 }

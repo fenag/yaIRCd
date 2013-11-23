@@ -274,6 +274,17 @@ void send_err_nosuchchannel(struct irc_client *client, char *chan) {
 		"development.yaircd.org", client->nick, chan);
 }
 
+/** Sends ERR_NOTONCHANNEL to a client who tried to part a channel he's not in.
+	@param client The erratic client to notify
+	@param chan The channel name
+*/
+void send_err_notonchannel(struct irc_client *client, char *chan) {
+	const char *format = 
+		":%s " ERR_NOTONCHANNEL " %s %s :You're not on that channel\r\n";
+	yaircd_send(client, format,
+		"development.yaircd.org", client->nick, chan);
+}
+
 /** Function used when a client wants to flush his messages write queue.
 	This is indirectly called by the queue library in `client_queue_foreach()` (see `queue_async_cb()`).
 	@param message The message dequeued in the current iteration.
