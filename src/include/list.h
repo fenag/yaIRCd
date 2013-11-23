@@ -23,8 +23,12 @@ typedef struct yaircd_list *Word_list_ptr;
 Word_list_ptr init_word_list(void (*free_function)(void *), int (*is_valid)(char), char (*pos_to_char)(int), int (*char_to_pos)(char), int charcount);
 void destroy_word_list(Word_list_ptr list, int free_data);
 void *list_find_word(Word_list_ptr list, char *word);
-void *list_find_and_execute(Word_list_ptr list, char *word, void *(*f)(void *, void *), void *fargs, int *success);
+void *list_find_word_nolock(Word_list_ptr list, char *word);
+void *list_find_and_execute(Word_list_ptr list, char *word, void *(*match_fun)(void *, void *), void *(*nomatch_fun)(void *), void *match_fargs, void *nomatch_fargs, int *success);
+void *list_find_and_execute_globalock(Word_list_ptr list, char *word, void *(*match_fun)(void *, void *), void *(*nomatch_fun)(void *), void *match_fargs, void *nomatch_fargs, int *success);
 int list_add(Word_list_ptr list, void *data, char *word);
+int list_add_nolock(Word_list_ptr list, void *data, char *word);
 void *list_delete(Word_list_ptr list, char *word);
+void *list_delete_nolock(Word_list_ptr list, char *word);
 
 #endif /* __YAIRCD_GENERIC_LIST_GUARD__ */

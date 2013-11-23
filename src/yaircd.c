@@ -11,13 +11,13 @@
 #include <strings.h>
 #include <ev.h>
 #include <string.h>
-#include "client.h"
-#include "client_list.h"
-#include "yaIRCd.h"
-
 #include <openssl/crypto.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include "client.h"
+#include "client_list.h"
+#include "channel.h"
+#include "yaIRCd.h"
 
 /** @file
 	@brief Main IRCd code
@@ -322,6 +322,11 @@ int ircd_boot(void) {
 	/* Initialize data structures */
 	if (client_list_init() == -1) {
 		fprintf(stderr, "::yaircd.c:main(): Unable to initialize clients list.\n");
+		return 1;
+	}
+	
+	if (chan_init() == -1) {
+		fprintf(stderr, "::yaircd.c:main(): Unable to initialize channels list.\n");
 		return 1;
 	}
 

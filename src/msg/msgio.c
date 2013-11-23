@@ -95,6 +95,20 @@ void yaircd_send(struct irc_client *client, const char *fmt, ...) {
 	}
 }
 
+int cmd_print_reply(char *buf, size_t size, char *msg, ...) {
+	int ret;
+	va_list args;
+	va_start(args, msg);
+	ret = vsnprintf(buf, size, msg, args);
+	va_end(args);
+	if (ret >= size) {
+		buf[size-1] = '\n';
+		buf[size-2] = '\r';
+		ret = size;
+	}
+	return ret;
+}
+
 /** Sends ERR_NOTREGISTERED to a client who tried to use any command other than NICK, PASS or USER before registering.
 	@param client The erratic client to notify
 */
@@ -247,6 +261,17 @@ void send_err_nosuchnick(struct irc_client *client, char *nick) {
 		":%s " ERR_NOSUCHNICK " %s %s :No such nick/channel\r\n";
 	yaircd_send(client, format,
 		"development.yaircd.org", client->nick, nick);
+}
+
+/** Sends ERR_NOSUCHCHANNEL to a client who supplied an invalid channel name.
+	@param client The erratic client to notify
+	@param chan The invalid channel name
+*/
+void send_err_nosuchchannel(struct irc_client *client, char *chan) {
+	const char *format =
+		":%s " ERR_NOSUCHCHANNEL " %s %s :No such channel\r\n";
+	yaircd_send(client, format,
+		"development.yaircd.org", client->nick, chan);
 }
 
 /** Function used when a client wants to flush his messages write queue.

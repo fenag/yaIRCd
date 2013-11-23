@@ -26,6 +26,9 @@
 
 /** Max. nick length, as specified in RFC Section 1.2 */
 #define MAX_NICK_LENGTH 9
+
+/** Max. chan name length */
+#define MAX_CHANNAME_LENGTH 32
 /* End protocol limits */
 
 /* Error replies */

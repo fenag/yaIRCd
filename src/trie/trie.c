@@ -54,7 +54,7 @@ static struct trie_node *init_node(int edges) {
 	@param edges How many edges each node is allowed to have, that is, the size of this trie's alphabet.
 	@return A new trie instance with no words, or `NULL` if there isn't enough memory to create a trie.
 */
-struct trie_t *init_trie(void (*free_function)(void *), int (*is_valid)(char), char (*pos_to_char)(int), int (*char_to_pos)(char), int edges) {
+struct trie_t *init_trie(void (*free_function)(void *, void *), int (*is_valid)(char), char (*pos_to_char)(int), int (*char_to_pos)(char), int edges) {
 	struct trie_t *trie;
 	if ((trie = malloc(sizeof(struct trie_t))) == NULL) {
 		return NULL;
@@ -88,16 +88,19 @@ static inline void free_child(struct trie_node *node, unsigned char pos) {
 	@param node The top node (in the beginning, most likely the root node).
 	@param trie A trie, as returned by `init_trie()`.
 	@param free_data `TRIE_FREE_DATA` if the free function stored in `trie` shall be used to free each node's data, `TRIE_NO_FREE_DATA` otherwise
+	@param args A pointer to a generic data type that will be passed as the second argument to this trie's node data freeing function, as defined in `init_trie()`, if `TRIE_FREE_DATA` is set. 
+				This can be `NULL`.
+				The first parameter is always the pointer to the deleted node's data.
 */
-static void destroy_aux(struct trie_node *node, struct trie_t *trie, int free_data) {
+static void destroy_aux(struct trie_node *node, struct trie_t *trie, int free_data, void *args) {
 	int i;
 	for (i = 0; i < trie->edges_no; i++) {
 		if (node->edges[i] != NULL) {
-			destroy_aux(node->edges[i], trie, free_data);
+			destroy_aux(node->edges[i], trie, free_data, args);
 		}
 	}
 	if (free_data == TRIE_FREE_DATA) {
-		(*trie->free_f)(node->data);
+		(*trie->free_f)(node->data, args);
 	}
 	free(node->edges);
 	free(node);
@@ -106,9 +109,12 @@ static void destroy_aux(struct trie_node *node, struct trie_t *trie, int free_da
 /** Frees every allocated storage for a trie.
 	@param trie A trie, as returned by `init_trie()`.
 	@param free_data `TRIE_FREE_DATA` if the free function stored in `trie` shall be used to free each node's data, `TRIE_NO_FREE_DATA` otherwise
+	@param args A pointer to a generic data type that will be passed as the second argument to this trie's node data freeing function, as defined in `init_trie()`, if `TRIE_FREE_DATA` is set. 
+				This can be `NULL`.
+				The first parameter is always the pointer to the deleted node's data.
 */
-void destroy_trie(struct trie_t *trie, int free_data) {
-	destroy_aux(trie->root, trie, free_data);
+void destroy_trie(struct trie_t *trie, int free_data, void *args) {
+	destroy_aux(trie->root, trie, free_data, args);
 	free(trie);
 }
 
@@ -289,7 +295,7 @@ static inline struct trie_node_stack_elm *trie_push(struct trie_node_stack *st, 
 	@warning This function does not free state information when it returns `NULL`. Thus, the caller is required to save `st` in an auxiliary variable. If the same variable is used, then the reference to the last
 			 valid state is lost and it is not possible to free it anymore.
 */
-static struct trie_node_stack *find_by_prefix_next_trie_n(struct trie_node_stack *st, char *result, struct trie_t *trie, int *err_code) {
+static struct trie_node_stack *find_by_prefix_next_trie_n(struct trie_node_stack *st, char *result, struct trie_t *trie, int *err_code, void **data) {
 	struct trie_node_stack_elm *curr;
 	int i;
 	*err_code = 0;
@@ -308,6 +314,7 @@ static struct trie_node_stack *find_by_prefix_next_trie_n(struct trie_node_stack
 		if (curr->el->is_word) {
 			st->path[curr->depth] = '\0';
 			strcpy(result, st->path);
+			*data = curr->el->data;
 			free(curr);
 			return st;
 		}
@@ -353,7 +360,7 @@ void free_trie_stack(struct trie_node_stack *st);
 	@note It is always safe to use `result` as a valid match as long as this function does not return `NULL`. If `*err_code == TRIE_NO_MEM`, it just means that subsequent searches may end prematurely, and that
 		  not every match will possibly be returned.
 */
-struct trie_node_stack *find_by_prefix_next_trie(struct trie_t *trie, struct trie_node_stack *st, const char *prefix, int depth, char *result, int *err_code) {
+struct trie_node_stack *find_by_prefix_next_trie(struct trie_t *trie, struct trie_node_stack *st, const char *prefix, int depth, char *result, int *err_code, void **data) {
 	struct trie_node *n;
 	struct trie_node_stack *new_st;
 	const char *ptr;
@@ -394,11 +401,12 @@ struct trie_node_stack *find_by_prefix_next_trie(struct trie_t *trie, struct tri
 		}
 		if (n->is_word) {
 			strcpy(result, st->prefix);
+			*data = n->data;
 			return st;
 		}
 	}
 	result += sprintf(result, "%s", st->prefix);
-	if ((new_st = find_by_prefix_next_trie_n(st, result, trie, err_code)) == NULL) {
+	if ((new_st = find_by_prefix_next_trie_n(st, result, trie, err_code, data)) == NULL) {
 		free_trie_stack(st);
 	}
 	return new_st;

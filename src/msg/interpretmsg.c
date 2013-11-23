@@ -8,6 +8,7 @@
 #include "wrappers.h"
 #include "client_list.h"
 #include "client.h"
+#include "channel.h"
 
 /** @file
 	@brief Functions responsible for interpreting an IRC message.
@@ -22,21 +23,6 @@
 	@see parsemsg.c
 	@todo Commands are now recognized by serial comparison. Discuss if a trie approach is benefitial.
 */
-
-
-static inline int cmd_print_reply(char *buf, size_t size, char *msg, ...) {
-	int ret;
-	va_list args;
-	va_start(args, msg);
-	ret = vsnprintf(buf, size, msg, args);
-	va_end(args);
-	if (ret >= size) {
-		buf[size-1] = '\n';
-		buf[size-2] = '\r';
-		ret = size;
-	}
-	return ret;
-}
 
 
 /**
@@ -93,12 +79,12 @@ int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *para
 				return 0;
 			}
 			switch (client_list_add(client, params[0])) {
-				case CLIENT_LST_INVALID_NICK:
+				case LST_INVALID_WORD:
 					send_err_erroneusnickname(client, params[0]);
 					return 0;
-				case CLIENT_LST_NO_MEM:
+				case LST_NO_MEM:
 					pthread_exit(NULL);
-				case CLIENT_LST_ALREADY_EXISTS:
+				case LST_ALREADY_EXISTS:
 					send_err_nicknameinuse(client, params[0]);
 					return 0;
 			}
@@ -181,6 +167,34 @@ int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *para
 			(void) client_list_find_and_execute(params[0], whois_cmd, (void *) &wrapper, &status);
 			if (status == 0) {
 				send_err_nosuchnick(client, params[0]);
+			}
+		}
+		if (strcasecmp(cmd, ==, "join")) {
+			/*
+				ERR_NEEDMOREPARAMS
+				ERR_INVITEONLYCHAN
+				ERR_CHANNELISFULL
+				ERR_NOSUCHCHANNEL - channel name is invalid
+				ERR_TOOMANYTARGETS
+				ERR_BANNEDFROMCHAN
+				ERR_BADCHANNELKEY
+				ERR_BADCHANMASK
+				ERR_TOOMANYCHANNELS
+				ERR_UNAVAILRESOURCE
+				
+				RPL_TOPIC
+			*/
+			if (params_size < 1) {
+				send_err_needmoreparams(client, cmd);
+				return 0;
+			}
+			switch (do_join(client, params[0])) {
+				case CHAN_INVALID_NAME:
+					send_err_nosuchchannel(client, params[0]);
+					break;
+				case CHAN_NO_MEM:
+					fprintf(stderr, "::interpretmsg.c:interpret_msg(): No memory to allocate new channel, ignoring request.\n");
+					break;
 			}
 		}
 		/* ... */

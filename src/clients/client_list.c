@@ -5,7 +5,6 @@
 #include <pthread.h>
 #include <ctype.h>
 #include "client_list.h"
-#include "list.h"
 
 /** @file
 	@brief Client list operations implementation
@@ -24,15 +23,6 @@
 	@todo Allow digits in nicknames, as well as other special characters such as underscore
 */
 
-/** Defines the size of the alphabet (letters in `[a-z]`). */
-#define NICK_ALPHABET_SIZE 26
-/** Defines how many special characters are allowed */
-#define NICK_SPECIAL_CHARS_SIZE 9
-/** Defines the size of the numeric alphabet (digits `[0-9]`). */
-#define NICK_DIGITS_COUNT 10
-/** Total number of different characters */
-#define NICK_EDGES_NO NICK_ALPHABET_SIZE+NICK_SPECIAL_CHARS_SIZE
-
 /** A words list to hold every client */
 static Word_list_ptr clients;
 
@@ -40,7 +30,7 @@ static Word_list_ptr clients;
 	@param s The character to check.
 	@return `1` if `s` is allowed in a nickname; `0` otherwise.
 */
-static int is_valid(char s) {
+int nick_is_valid(char s) {
 	return ((s >= 'a' && s <= 'z') || (s >= 'A' && s <= 'Z') || s == '-' || s == '[' || s == ']' || s == '\\' || s == '`' || s == '^' || s == '{' || s == '}' || s =='|');
 }
 
@@ -56,7 +46,7 @@ static inline char special_id_to_char(int i) {
 	@param i ID
 	@return The character whose ID is `i`
 */
-static char pos_to_char(int i) {
+char nick_pos_to_char(int i) {
 	return ((char) ((i < NICK_ALPHABET_SIZE) ? ('a'+i) : special_id_to_char(i - NICK_ALPHABET_SIZE)));
 }
 
@@ -72,7 +62,7 @@ static inline int special_char_id(char s) {
 	@param s The character
 	@return `s`'s ID
 */
-static int char_to_pos(char s) {
+int nick_char_to_pos(char s) {
 	return (((s >= 'a' && (s) <= 'z') || (s >= 'A' && s <= 'Z')) ? tolower((unsigned char) s) - 'a' : NICK_ALPHABET_SIZE + special_char_id(s));
 }
 
@@ -81,7 +71,7 @@ static int char_to_pos(char s) {
 	@warning This function must be called exactly once, by the parent thread, before any thread is created and tries to access the list of clients.
  */
 int client_list_init(void) {
-	if ((clients = init_word_list(NULL, is_valid, pos_to_char, char_to_pos, NICK_EDGES_NO)) == NULL) {
+	if ((clients = init_word_list(NULL, nick_is_valid, nick_pos_to_char, nick_char_to_pos, NICK_EDGES_NO)) == NULL) {
 		return -1;
 	}
 	return 0;
@@ -109,7 +99,7 @@ void client_list_destroy(void) {
 	@note `(*f)()` shall cast its first argument to a client's structure pointer.
 */
 void *client_list_find_and_execute(char *nick, void *(*f)(void *, void *), void *fargs, int *success) {
-	return list_find_and_execute(clients, nick, f, fargs, success);
+	return list_find_and_execute(clients, nick, f, NULL, fargs, NULL, success);
 }
 
 /** Atomically adds a client to the clients list if there isn't already a client with the same nickname.
@@ -118,18 +108,16 @@ void *client_list_find_and_execute(char *nick, void *(*f)(void *, void *), void 
 	@param newnick Nickname for this client.
 	@return <ul>
 				<li>`0` on success</li>
-				<li>`CLIENT_LST_INVALID_NICK` if this client's nickname contains invalid characters, in which case nothing was added to the list
-				<li>`CLIENT_LST_NO_MEM` if there isn't enough memory to create a new client entry</li>
-				<li>`CLIENT_LST_ALREADY_EXISTS` if there's a known client with this nickname</li>
+				<li>`LST_INVALID_NICK` if this client's nickname contains invalid characters, in which case nothing was added to the list
+				<li>`LST_NO_MEM` if there isn't enough memory to create a new client entry</li>
+				<li>`LST_ALREADY_EXISTS` if there's a known client with this nickname</li>
 			</ul>
 	@warning This function does not update `client->nick` to `newnick`.
 	@note `newnick` is assumed to be `client`'s nickname, no matter whatever is stored in `client->nick`. This is to ease the task of adding new clients which may contain invalid characters in their nickname, but
 		   we haven't yet found out.
 */
 int client_list_add(struct irc_client *client, char *newnick) {
-	int ret;
-	ret = list_add(clients, (void *) client, newnick);
-	return ret == LST_INVALID_WORD ? CLIENT_LST_INVALID_NICK : ret == LST_NO_MEM ? CLIENT_LST_NO_MEM : ret == LST_ALREADY_EXISTS ? CLIENT_LST_ALREADY_EXISTS : 0;
+	return list_add(clients, (void *) client, newnick);
 }
 
 /** Deletes a client from the clients list. If no such client exists, nothing happens.

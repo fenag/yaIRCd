@@ -48,9 +48,7 @@ struct trie_node {
 /** A trie */
 struct trie_t {
 	struct trie_node *root; /**<Root node */
-	void (*free_f)(void *args); /**<A pointer to a function that is responsible for free'ing a node's `data` when it is about to be destroyed. 
-									It is only called by `destroy_trie()`, and only if the caller intends so - this decision is controlled by an argument to `destroy_trie()`.
-									This function will be passed the `data` pointer stored in a trie node. */
+	void (*free_f)(void *, void *); /**<A pointer to a function that is responsible for free'ing a node's `data` when it is about to be destroyed. See `destroy_trie()` and `delete_word_trie()` for further info. */									     
 	int (*is_valid)(char s); /**<A pointer to a function that returns `1` if `s` is a valid character (considered part of a word), and `0` otherwise. */
 	char (*pos_to_char)(int p); /**<A pointer to a function that converts an index position from `edges` back to its character representation. */
 	int (*char_to_pos)(char s); /**<A pointer to a function that converts a character `s` into a valid, unique position that is used to index `edges`. */
@@ -74,11 +72,11 @@ struct trie_node_stack {
 };
 
 /* These functions are documented in the C file that implements them */
-struct trie_t *init_trie(void (*free_function)(void *), int (*is_valid)(char), char (*pos_to_char)(int), int (*char_to_pos)(char), int edges);
-void destroy_trie(struct trie_t *trie, int free_data);
+struct trie_t *init_trie(void (*free_function)(void *, void *), int (*is_valid)(char), char (*pos_to_char)(int), int (*char_to_pos)(char), int edges);
+void destroy_trie(struct trie_t *trie, int free_data, void *args);
 int add_word_trie(struct trie_t *trie, char *word, void *data);
 void *delete_word_trie(struct trie_t *trie, char *word);
 void *find_word_trie(struct trie_t *trie, char *word);
-struct trie_node_stack *find_by_prefix_next_trie(struct trie_t *trie, struct trie_node_stack *st, const char *prefix, int depth, char *result, int *err_code);
+struct trie_node_stack *find_by_prefix_next_trie(struct trie_t *trie, struct trie_node_stack *st, const char *prefix, int depth, char *result, int *err_code, void **data);
 void free_trie_stack(struct trie_node_stack *st);
 #endif /* TRIE_GUARD */
