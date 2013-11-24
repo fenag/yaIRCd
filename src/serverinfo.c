@@ -48,13 +48,16 @@ struct server_info {
 	const char *motd_file_path; /**<MOTD file path */
 };
 
+/** Global server info structure holding every meta information about the IRCd. */
 static struct server_info *info;
+
+/** libconfig's necessary buffer for path lookups. */
 static config_t cfg;
 
 /**
  * Using libconfig, this function creates and populates a `struct server_info` which is going to hold information about the chosen
  * configuration for this server. If one changes CONFIG_FILE content, this is the only function, that one needs to adapt.
- * 
+ * This must be called exactly once by the parent thread before any other client connections are accepted.
  * @warning If you need to mess around with this function, you better take a look at libconfig's documentation:
  * 			http://www.hyperrealm.com/libconfig/libconfig_manual.html
  * @return `1` on error; `0` otherwise
@@ -124,34 +127,58 @@ void freeServerInfo(void) {
 	config_destroy(&cfg);
 }
 
+/** Reads the standard socket listening IP.
+	@return Pointer to null terminated characters sequence with the listening IP.
+*/
 const char *get_std_socket_ip(void) {
 	return info->socket_standard.ip;
 }
 
+/** Reads the secure socket listening IP.
+	@return Pointer to null terminated characters sequence with the listening IP.
+*/
 const char *get_ssl_socket_ip(void) {
 	return info->socket_secure.ip;
 }
 
+/** Reads the standard socket port number.
+	@return Listening port number.
+*/
 int get_std_socket_port(void) {
 	return info->socket_standard.port;
 }
 
+/** Reads the secure socket port number.
+	@return Listening port number.
+*/
 int get_ssl_socket_port(void) {
 	return info->socket_secure.port;
 }
 
+/** Reads the standard socket `max_hangup_clients` attribute.
+	@return Max. hangup clients configured for this socket.
+*/
 int get_std_socket_hangup(void) {
 	return info->socket_standard.max_hangup_clients;
 }
 
+/** Reads the secure socket `max_hangup_clients` attribute.
+	@return Max. hangup clients configured for this socket.
+*/
 int get_ssl_socket_hangup(void) {
 	return info->socket_secure.max_hangup_clients;
 }
 
+/** Reads the server's certificate file path.
+	@return Pointer to null terminated characters sequence with the server's certificate file path.
+*/
 const char *get_cert_path(void) {
 	return info->certificate_path;
 }
 
+/** Reads the server's private key file path.
+	@return Pointer to null terminated characters sequence with the server's private key file path.
+*/
 const char *get_priv_key_path(void) {
 	return info->private_key_path;
 }

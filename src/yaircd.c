@@ -81,8 +81,8 @@ static struct sockaddr_in serv_addr; /**<This node's address, namely, the IP and
 static struct sockaddr_in ssl_addr; /**<This node's address, namely, the IP and port where we will be listening for new secure connections. */
 static pthread_attr_t thread_attr; /**<Threads creation attributes. We use detached threads, since we're not interested in calling `pthread_join()`. */
 
-static const SSL_METHOD *ssl_method;
-static SSL_CTX *ssl_context;
+static const SSL_METHOD *ssl_method; /**<Openssl's structure holding information about the specific SSL protocol used. This code uses SSLv23 method. */
+static SSL_CTX *ssl_context; /**<The SSL context for the main ssl socket, as required by the OpenSSL library. */
 
 static void connection_cb(EV_P_ ev_io *w, int revents);
 static void ssl_connection_cb(EV_P_ ev_io *w, int revents);
