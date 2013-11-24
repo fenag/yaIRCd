@@ -7,6 +7,7 @@
 #include "channel.h"
 #include "msgio.h"
 #include "client_queue.h"
+#include "serverinfo.h"
 
 /** @file
 	@brief Channels management module
@@ -140,7 +141,7 @@ static void join_ack_aux(void *chanuser, void *args) {
 	chanusr = (struct chan_user *) chanuser;
 	info = (struct irc_channel_wrapper *) args;
 	size = cmd_print_reply(msg, sizeof(msg),
-		":%s " RPL_NAMREPLY " %s = %s :%s!%s@%s\r\n", "development.yaircd.org", info->client->nick, info->channel, chanusr->user->nick, chanusr->user->username, chanusr->user->public_host);
+		":%s " RPL_NAMREPLY " %s = %s :%s!%s@%s\r\n", get_server_name(), info->client->nick, info->channel, chanusr->user->nick, chanusr->user->username, chanusr->user->public_host);
 	(void) write_to(info->client, msg, size);
 	if (chanusr->user != info->client) {
 		notify_join(chanusr->user, info->client, info->channel);
@@ -162,17 +163,17 @@ static void join_ack(struct irc_client *client, irc_channel_ptr chan) {
 		":%s!%s@%s JOIN :%s\r\n", client->nick, client->username, client->public_host, chan->name);
 	(void) write_to(client, msg, size);
 	size = cmd_print_reply(msg, sizeof(msg),
-		":%s MODE %s +nt\r\n", "development.yaircd.org", chan->name);
+		":%s MODE %s +nt\r\n", get_server_name(), chan->name);
 	(void) write_to(client, msg, size);
 	size = cmd_print_reply(msg, sizeof(msg),
-		":%s " RPL_TOPIC " %s %s :%s\r\n", "development.yaircd.org", client->nick, chan->name, chan->topic);
+		":%s " RPL_TOPIC " %s %s :%s\r\n", get_server_name(), client->nick, chan->name, chan->topic);
 	(void) write_to(client, msg, size);
 	
 	args.client = client;
 	args.channel = chan->name;
 	trie_for_each(chan->users, join_ack_aux, (void *) &args);	
 	size = cmd_print_reply(msg, sizeof(msg),
-		":%s " RPL_ENDOFNAMES " %s %s :End of NAMES list\r\n", "development.yaircd.org", client->nick, chan->name);
+		":%s " RPL_ENDOFNAMES " %s %s :End of NAMES list\r\n", get_server_name(), client->nick, chan->name);
 	(void) write_to(client, msg, size);
 }
 

@@ -10,6 +10,7 @@
 	
 	Every access to server information should be done through the use of functions declared in this header file.
 	
+	@author Filipe Goncalves
 	@author Fabio Ribeiro
 	@date November 2013
 */
@@ -17,6 +18,8 @@
 /* Documented in .c source file */
 int loadServerInfo(void);
 void freeServerInfo(void);
+const char *get_server_name(void);
+const char *get_server_desc(void);
 const char *get_std_socket_ip(void);
 const char *get_ssl_socket_ip(void);
 int get_std_socket_port(void);
@@ -25,4 +28,7 @@ int get_std_socket_hangup(void);
 int get_ssl_socket_hangup(void);
 const char *get_cert_path(void);
 const char *get_priv_key_path(void);
+const char *get_cloak_net_prefix(void);
+const char *get_cloak_key(int i);
+size_t get_cloak_key_length(int i);
 #endif /* __YAIRCD_SERVINFO_GUARD__ */

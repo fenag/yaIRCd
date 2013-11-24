@@ -9,6 +9,7 @@
 #include "protocol.h"
 #include "msgio.h"
 #include "wrappers.h"
+#include "serverinfo.h"
 
 /** @file
 	@brief Implementation for send_* functions.
@@ -127,7 +128,7 @@ void send_err_notregistered(struct irc_client *client) {
 	char *format =
 		":%s " ERR_NOTREGISTERED " * :You have not registered\r\n";
 	yaircd_send(client, format,
-		"development.yaircd.org");
+		get_server_name());
 }
 
 /** Sends ERR_UNKNOWNCOMMAND to a client who seems to be messing around with commands.
@@ -141,7 +142,7 @@ void send_err_unknowncommand(struct irc_client *client, char *cmd) {
 	char *format =
 		":%s " ERR_UNKNOWNCOMMAND " %s %s :Unknown command\r\n";
 	yaircd_send(client, format,
-		"development.yaircd.org", client->is_registered ? client->nick : "*", *cmd != '\0' ? cmd : "NULL_CMD");
+		get_server_name(), client->is_registered ? client->nick : "*", *cmd != '\0' ? cmd : "NULL_CMD");
 }
 
 /** Sends ERR_NONICKNAMEGIVEN to a client who issued a NICK command but didn't provide a nick
@@ -151,7 +152,7 @@ void send_err_nonicknamegiven(struct irc_client *client) {
 	char *format =
 		":%s " ERR_NONICKNAMEGIVEN " %s :No nickname given\r\n";
 	yaircd_send(client, format,
-		"development.yaircd.org", client->is_registered ? client->nick : "*");
+		get_server_name(), client->is_registered ? client->nick : "*");
 }
 
 /** Sends ERR_NEEDMOREPARAMS to a client who issued a command but didn't provide enough parameters for his request to be fulfilled
@@ -163,7 +164,7 @@ void send_err_needmoreparams(struct irc_client *client, char *cmd) {
 	char *format =
 		":%s " ERR_NEEDMOREPARAMS " %s %s :Not enough parameters\r\n";
 	yaircd_send(client, format,
-		"development.yaircd.org", client->is_registered ? client->nick : "*", cmd);
+		get_server_name(), client->is_registered ? client->nick : "*", cmd);
 }
 
 /** Sends ERR_ERRONEUSNICKNAME to a client who issued a NICK command and chose a nickname that contains invalid characters or exceeds `MAX_NICK_LENGTH`
@@ -174,7 +175,7 @@ void send_err_erroneusnickname(struct irc_client *client, char *nick) {
 	char *format =
 		":%s " ERR_ERRONEUSNICKNAME " %s %s :Erroneous nickname\r\n";
 	yaircd_send(client, format,
-		"development.yaircd.org", client->is_registered ? client->nick : "*", nick);
+		get_server_name(), client->is_registered ? client->nick : "*", nick);
 }
 
 /** Sends ERR_NICKNAMEINUSE to a client who issued a NICK command and chose a nickname that is already in use.
@@ -185,7 +186,7 @@ void send_err_nicknameinuse(struct irc_client *client, char *nick) {
 	char *format =
 		":%s " ERR_NICKNAMEINUSE " %s %s :Nickname is already in use\r\n";
 	yaircd_send(client, format,
-		"development.yaircd.org", client->is_registered ? client->nick : "*", nick);
+		get_server_name(), client->is_registered ? client->nick : "*", nick);
 }
 
 /** Sends ERR_ALREADYREGISTRED to a client who issued a USER command even though he was already registred.
@@ -196,7 +197,7 @@ void send_err_alreadyregistred(struct irc_client *client) {
 		":%s " ERR_ALREADYREGISTRED " %s :You may not reregister.\r\n";
 	
 	yaircd_send(client, format,
-		"development.yaircd.org", client->nick);
+		get_server_name(), client->nick);
 }
 
 /** Sends MOTD to a client.
@@ -214,14 +215,14 @@ void send_motd(struct irc_client *client) {
 		":%s " RPL_MOTD " %s :- Good luck! :P\r\n"
 		":%s " RPL_ENDOFMOTD " %s :End of /MOTD command\r\n";
 	yaircd_send(client, format,
-		"development.yaircd.org", client->nick, "development.yaircd.org",
-		"development.yaircd.org", client->nick,
-		"development.yaircd.org", client->nick,
-		"development.yaircd.org", client->nick,
-		"development.yaircd.org", client->nick,
-		"development.yaircd.org", client->nick,
-		"development.yaircd.org", client->nick,
-		"development.yaircd.org", client->nick);
+		get_server_name(), client->nick, get_server_name(),
+		get_server_name(), client->nick,
+		get_server_name(), client->nick,
+		get_server_name(), client->nick,
+		get_server_name(), client->nick,
+		get_server_name(), client->nick,
+		get_server_name(), client->nick,
+		get_server_name(), client->nick);
 }
 
 /** Sends the welcome message to a newly registred user
@@ -236,10 +237,10 @@ void send_welcome(struct irc_client *client) {
 		":%s " RPL_MYINFO " %s :%s %s %s %s\r\n";
 
 	yaircd_send(client, format,
-		"development.yaircd.org", client->nick, client->nick, client->username, client->hostname,
-		"development.yaircd.org", client->nick, "development.yaircd.org", "v1.0",
-		"development.yaircd.org", client->nick, "15/11/2013",
-		"development.yaircd.org", client->nick, "development.yaircd.org", "v1.0", "UMODES=xTR", "CHANMODES=mvil");
+		get_server_name(), client->nick, client->nick, client->username, client->hostname,
+		get_server_name(), client->nick, get_server_name(), "v1.0",
+		get_server_name(), client->nick, "15/11/2013",
+		get_server_name(), client->nick, get_server_name(), "v1.0", "UMODES=xTR", "CHANMODES=mvil");
 }
 
 /** Sends ERR_NORECIPIENT to a client trying to send a message without a recipient.
@@ -250,7 +251,7 @@ void send_err_norecipient(struct irc_client *client, char *cmd) {
 	const char *format =
 		":%s " ERR_NORECIPIENT " %s :No recipient given (%s)\r\n";
 	yaircd_send(client, format,
-		"development.yaircd.org", client->nick, cmd);
+		get_server_name(), client->nick, cmd);
 }
 
 /** Sends ERR_NOTEXTTOSEND to a client trying to send an empty message to another client.
@@ -260,7 +261,7 @@ void send_err_notexttosend(struct irc_client *client) {
 	const char *format =
 		":%s " ERR_NOTEXTTOSEND " %s :No text to send\r\n";
 	yaircd_send(client, format,
-		"development.yaircd.org", client->nick);
+		get_server_name(), client->nick);
 }
 
 /** Sends ERR_NOSUCHNICK to a client who supplied a nonexisting target.
@@ -271,7 +272,7 @@ void send_err_nosuchnick(struct irc_client *client, char *nick) {
 	const char *format =
 		":%s " ERR_NOSUCHNICK " %s %s :No such nick/channel\r\n";
 	yaircd_send(client, format,
-		"development.yaircd.org", client->nick, nick);
+		get_server_name(), client->nick, nick);
 }
 
 /** Sends ERR_NOSUCHCHANNEL to a client who supplied an invalid channel name.
@@ -282,7 +283,7 @@ void send_err_nosuchchannel(struct irc_client *client, char *chan) {
 	const char *format =
 		":%s " ERR_NOSUCHCHANNEL " %s %s :No such channel\r\n";
 	yaircd_send(client, format,
-		"development.yaircd.org", client->nick, chan);
+		get_server_name(), client->nick, chan);
 }
 
 /** Sends ERR_NOTONCHANNEL to a client who tried to part a channel he's not in.
@@ -293,7 +294,7 @@ void send_err_notonchannel(struct irc_client *client, char *chan) {
 	const char *format = 
 		":%s " ERR_NOTONCHANNEL " %s %s :You're not on that channel\r\n";
 	yaircd_send(client, format,
-		"development.yaircd.org", client->nick, chan);
+		get_server_name(), client->nick, chan);
 }
 
 /** Sends a generic PRIVMSG command notification to a given target. The destination can either be a channel or a user.

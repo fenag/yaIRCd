@@ -9,6 +9,7 @@
 #include "client_list.h"
 #include "client.h"
 #include "channel.h"
+#include "serverinfo.h"
 
 /** @file
 	@brief Functions responsible for interpreting an IRC message.
@@ -48,12 +49,12 @@ static void *whois_cmd(void *target_client, void *args) {
 	struct irc_client *target = (struct irc_client *) target_client;
 	char message[MAX_MSG_SIZE+1];
 	int length;
-	length = cmd_print_reply(message, sizeof(message), ":development.yaircd.org " RPL_WHOISUSER " %s %s %s %s * :%s\r\n", info->from->nick, target->nick, target->username, target->public_host, target->realname);
+	length = cmd_print_reply(message, sizeof(message), ":%s " RPL_WHOISUSER " %s %s %s %s * :%s\r\n", get_server_name(), info->from->nick, target->nick, target->username, target->public_host, target->realname);
 	(void) write_to(info->from, message, length);
-	length = cmd_print_reply(message, sizeof(message), ":development.yaircd.org " RPL_WHOISSERVER " %s %s %s :%s\r\n", info->from->nick, target->nick, "development.yaircd.org", "I will find you, and I will kill you!");
+	length = cmd_print_reply(message, sizeof(message), ":%s " RPL_WHOISSERVER " %s %s %s :%s\r\n", get_server_name(), info->from->nick, target->nick, get_server_name(), get_server_desc());
 	(void) write_to(info->from, message, length);
 	/* TODO Implement RPL_WHOISIDLE and RPL_WHOISCHANNELS */
-	length = cmd_print_reply(message, sizeof(message), ":development.yaircd.org " RPL_ENDOFWHOIS " %s %s :End of WHOIS list\r\n", info->from->nick, target->nick);
+	length = cmd_print_reply(message, sizeof(message), ":%s " RPL_ENDOFWHOIS " %s %s :End of WHOIS list\r\n", get_server_name(), info->from->nick, target->nick);
 	(void) write_to(info->from, message, length);
 	return NULL;
 }

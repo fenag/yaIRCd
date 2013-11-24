@@ -17,6 +17,7 @@
 #include "msgio.h"
 #include "interpretmsg.h"
 #include "cloak.h"
+#include "serverinfo.h"
 
 /** @file
 	@brief Implementation of functions that deal with irc clients
@@ -174,10 +175,10 @@ static struct irc_client *create_client(struct irc_client_args_wrapper *args) {
 	new_client->hostname = NULL;
 	initialize_irc_message(&new_client->last_msg);
 	
-	yaircd_send(new_client, ":development.yaircd.org NOTICE AUTH :*** Looking up your hostname...\r\n");
+	yaircd_send(new_client, ":%s NOTICE AUTH :*** Looking up your hostname...\r\n", get_server_name());
 	if (!args->is_ipv6) {
 		if (getnameinfo((struct sockaddr *) &args->address.ipv4_address, args->address_length, hostbuf, sizeof(hostbuf), NULL, 0, NI_NAMEREQD) != 0) {
-			yaircd_send(new_client, ":development.yaircd.org NOTICE AUTH :*** Couldn't resolve your hostname; using your IP address instead.\r\n");
+			yaircd_send(new_client, ":%s NOTICE AUTH :*** Couldn't resolve your hostname; using your IP address instead.\r\n", get_server_name());
 			if (inet_ntop(AF_INET, (void *) &args->address.ipv4_address.sin_addr, ip, sizeof(ip)) == NULL) {
 				/* Weird case ... no reverse lookup, and invalid IP..? */
 				fprintf(stderr, "::client.c:create_client(): Couldn't find a reverse hostname, and inet_ntop() reported an error.\n");
@@ -195,7 +196,7 @@ static struct irc_client *create_client(struct irc_client_args_wrapper *args) {
 			}
 		}
 		else {
-			yaircd_send(new_client, ":development.yaircd.org NOTICE AUTH :*** Found your hostname.\r\n");
+			yaircd_send(new_client, ":%s NOTICE AUTH :*** Found your hostname.\r\n", get_server_name());
 			new_client->host_reversed = 1;
 			if ((new_client->hostname = strdup(hostbuf)) == NULL) {
 				ev_loop_destroy(new_client->ev_loop);

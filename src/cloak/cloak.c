@@ -4,6 +4,7 @@
 #include <openssl/md5.h>
 #include <stdio.h>
 #include "cloak.h"
+#include "serverinfo.h"
 
 /** @file
 	@brief Hosts cloaking library implementation and algorithm explanation
@@ -57,18 +58,6 @@
 /** Maximum length of a cloaked host corresponding to a reverse looked up hostname. Used as buffer size for `hide_host()` */
 #define MAX_HOST_LEN 128
 
-/* TODO - make this configurable, i.e., allow the administrator to choose the keys using the conf file.
-   To do so, we will have to create an init() function here that stores a copy of the 3 keys and computes its length once.
-   We also don't document this, because it will soon be moved to the configuration files. Ignore doxygen warnings about this file.
- */
-static char *key1 = "aldkfghAVAVDHFNGJNmddjfj3356778498";
-static int key1_len = 34;
-static char *key2 = "LLDHFHJTMGUVMq1112fifhfJAH";
-static int key2_len = 26;
-static char *key3 = "IWMRFHFGmdhdfjdjSUJSNj12335434564JFJFNGKGkfdf0012L";
-static int key3_len = 50;
-static char *net_prefix = "ya";
-
 /** Takes 3 salt keys and a text, and stores `md5(md5(salt1+":"text+":"+salt2)+salt3)` into `result`.
 	@param salt1 The key used as a salt to prepend to `":"+text+":"`. Does not have to be null terminated.
 	@param salt2 The key used as a salt to append to `":"+text+":"`. Does not have to be null terminated.
@@ -84,7 +73,7 @@ static char *net_prefix = "ya";
 	@warning `result` is not null terminated.
 	@warning `result` shall be a valid and allocated memory location.
 */
-static void do_md5(char *salt1, size_t salt1_len, char *salt2, size_t salt2_len, char *salt3, size_t salt3_len, char *text, size_t text_len, unsigned char result[MD5_DIGEST_LENGTH]) {
+static void do_md5(const char *salt1, size_t salt1_len, const char *salt2, size_t salt2_len, const char *salt3, size_t salt3_len, const char *text, size_t text_len, unsigned char result[MD5_DIGEST_LENGTH]) {
 	char buf1[salt1_len+salt2_len+text_len+2]; /* +2 because we need space for ':' twice */
 	char buf2[MD5_DIGEST_LENGTH+salt3_len];
 	strncpy(buf1, salt1, salt1_len);
@@ -143,14 +132,14 @@ static char *hide_ipv4(char *host) {
 	size_t len;
 	
 	len = strlen(host);
-	do_md5(key2, key2_len, key3, key3_len, key1, key1_len, host, len, alpha);
+	do_md5(get_cloak_key(2), get_cloak_key_length(2), get_cloak_key(3), get_cloak_key_length(3), get_cloak_key(1), get_cloak_key_length(1), host, len, alpha);
 	for (len--; host[len] != '.'; len--)
 		; /* Intentionally left blank */
 	/* assert: host[len] == '.' */
-	do_md5(key3, key3_len, key1, key1_len, key2, key2_len, host, len, beta);
+	do_md5(get_cloak_key(3), get_cloak_key_length(3), get_cloak_key(1), get_cloak_key_length(1), get_cloak_key(2), get_cloak_key_length(2), host, len, beta);
 	for (len--; host[len] != '.'; len--)
 		; /* Intentionally left blank */
-	do_md5(key1, key1_len, key2, key2_len, key3, key3_len, host, len, gamma);
+	do_md5(get_cloak_key(1), get_cloak_key_length(1), get_cloak_key(2), get_cloak_key_length(2), get_cloak_key(3), get_cloak_key_length(3), host, len, gamma);
 	sprintf(result, "%X.%X.%X.IP", downsample(alpha), downsample(beta), downsample(gamma));
 	return strdup(result);
 }
@@ -166,10 +155,10 @@ static char *hide_host(char *host) {
 	char result[MAX_HOST_LEN];
 	size_t host_len = strlen(host);
 	
-	do_md5(key1, key1_len, key2, key2_len, key3, key3_len, host, host_len, alpha);
+	do_md5(get_cloak_key(1), get_cloak_key_length(1), get_cloak_key(2), get_cloak_key_length(2), get_cloak_key(3), get_cloak_key_length(3), host, host_len, alpha);
 	for (p = host; *p != '\0' && (*p != '.' || !isalpha((unsigned char) *(p+1))); p++)
 		; /* Intentionally left blank */
-	snprintf(result, sizeof(result), "%s-%X%s", net_prefix, downsample(alpha), *p == '\0' ? "" : p);
+	snprintf(result, sizeof(result), "%s-%X%s", get_cloak_net_prefix(), downsample(alpha), *p == '\0' ? "" : p);
 	return strdup(result);
 }
 

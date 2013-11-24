@@ -1,5 +1,6 @@
 #include <libconfig.h>
 #include <stdlib.h>
+#include <string.h>
 #include "serverinfo.h"
 
 /** @file
@@ -11,6 +12,7 @@
 	
 	@note These structs might need to be upgraded if any change is made on the configuration file structure.
 	
+	@author Filipe Goncalves
 	@author Fabio Ribeiro
 	@date November 2013
 */
@@ -26,11 +28,18 @@ struct socket_info {
 	int max_hangup_clients; /**<Max. hangup clients allowed to be on hold while the parent thread dispatches a new thread to deal with a freshly arrived connection */
 };
 
-/** Hold personal information about the server's administrator. */
+/** Holds personal information about the server's administrator. */
 struct admin_info {
 	const char *name; /**<Name of the administrator. */
 	const char *nick; /**<IRC nickname of the administrator. */
 	const char *email; /**<Admin's email. */
+};
+
+/** Holds necessary information for the cloaking module */
+struct cloaks_info {
+	const char *net_prefix; /**<Network prefix. This string is concatenated to a hyphen and prepended to every cloaked host resulting from a reverse hostname. */
+	const char *keys[3]; /**<Array of salt keys for the cloaking module. */
+	size_t keys_length[3]; /**<Length of each of the salt keys. Since this never changes during execution, we compute it once when we parse the file, and store it here. */
 };
 
 /** Structure to store general information about the server read from the configuration file */
@@ -43,6 +52,7 @@ struct server_info {
 	struct admin_info admin; /**<Server administrator info. See the documentation for `struct admin_info`. */
 	struct socket_info socket_standard; /**<Information about the standard (plaintext) socket. See the documentation for `struct socket_info`. */
 	struct socket_info socket_secure; /**<Information about the secure (SSL) socket. See the documentation for `struct socket_info`. */
+	struct cloaks_info cloaking; /**<Cloaked hosts information. See the documentation for `struct cloaks_info`. */
 	const char *certificate_path; /**<File path for the certificate file used for secure connections. */
 	const char *private_key_path; /**<File path for the server's private key. */
 	const char *motd_file_path; /**<MOTD file path */
@@ -96,6 +106,16 @@ int loadServerInfo(void) {
 	config_setting_lookup_string(setting, "nick", &(info->admin.nick));
 	config_setting_lookup_string(setting, "email", &(info->admin.email));
 	
+	/* Cloak block */
+	setting = config_lookup(&cfg, "serverinfo.cloak");
+	config_setting_lookup_string(setting, "net_prefix", &(info->cloaking.net_prefix));
+	config_setting_lookup_string(setting, "key1", &(info->cloaking.keys[0]));
+	config_setting_lookup_string(setting, "key2", &(info->cloaking.keys[1]));
+	config_setting_lookup_string(setting, "key3", &(info->cloaking.keys[2]));
+	info->cloaking.keys_length[0] = strlen(info->cloaking.keys[0]);
+	info->cloaking.keys_length[1] = strlen(info->cloaking.keys[1]);
+	info->cloaking.keys_length[2] = strlen(info->cloaking.keys[2]);
+	
 	/* Standard socket info */
 	setting = config_lookup(&cfg, "listen.sockets.standard");
 	
@@ -125,6 +145,20 @@ int loadServerInfo(void) {
  */
 void freeServerInfo(void) {
 	config_destroy(&cfg);
+}
+
+/** Reads this server's name.
+	@return Pointer to null terminated characters sequence with the server's name.
+*/
+const char *get_server_name(void) {
+	return info->name;
+}
+
+/** Reads this server's description.
+	@return Pointer to null terminated characters sequence with the server's description.
+*/
+const char *get_server_desc(void) {
+	return info->description;
 }
 
 /** Reads the standard socket listening IP.
@@ -182,3 +216,30 @@ const char *get_cert_path(void) {
 const char *get_priv_key_path(void) {
 	return info->private_key_path;
 }
+
+/** Reads the server's net prefix for cloaked hostnames
+	@return Pointer to null terminated characters sequence with the server's net prefix.
+*/
+const char *get_cloak_net_prefix(void) {
+	return info->cloaking.net_prefix;
+}
+
+/** Reads the server's cloak key number `i`. Keys are numbered 1 to 3.
+	@param i Which key to read.
+	@return Pointer to null terminated characters sequence with the server's cloaking key `i`.
+*/
+const char *get_cloak_key(int i) {
+	return info->cloaking.keys[i-1];
+}
+
+/** Reads the server's cloak key `i`'s length. This operation runs in `O(1)`, since this value never changes
+	and was computed at initialization time.
+	Keys are numbered 1 to 3.
+	@param i Which key's length to return.
+	@return Key `i`'s length.
+*/
+size_t get_cloak_key_length(int i) {
+	return info->cloaking.keys_length[i-1];
+}
+
+
