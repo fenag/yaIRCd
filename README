@@ -1,17 +1,32 @@
 --- WARNING ---
 
-This is an ongoing project. It is still in an early development stage. IRC Clients can only connect and disconnect to the server, no other commands are implemented yet.
+This is an ongoing project. It is still in an early development stage. IRC Clients can only:
+
+- Connect to the server
+- Disconnect from the server
+- Join a channel
+- Part a channel
+- Talk to a channel
+- Use private message
+- Issue WHOIS commands
+
+No other commands are implemented yet. There are no channel modes, no operators, nothing.
+QUIT command is not fully implemented yet; quit events are not spread to other clients, which means that someone who quits will show up on the channel user's list forever, because the server doesn't notify
+other channel clients about QUITS.
 
 Dependencies:
 libpthread
 libev (libev4, libev-dev)
 libssl, libcrypto (libssl-dev)
+libconfig
 
 To compile:
 make
 
 To generate documentation:
 make doc
+
+To configure, edit yaircd.conf
 
 To run:
 
