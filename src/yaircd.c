@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <libconfig.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -17,7 +16,7 @@
 #include "client.h"
 #include "client_list.h"
 #include "channel.h"
-#include "yaIRCd.h"
+#include "serverinfo.h"
 
 /** @file
 	@brief Main IRCd code
@@ -70,6 +69,11 @@
 	@todo See how to daemonize properly. Read http://www-theorie.physik.unizh.ch/~dpotter/howto/daemonize
 */
 
+/** Flag for `accept_connection()` to indicate an IPv6 socket */
+#define IPv6_SOCK 0x1
+
+/** Flag for `accept_connection()` to indicate an SSL socket */
+#define SSL_SOCK 0x2
 
 static int mainsock_fd; /**<Main socket file descriptor, where new insecure connection request arrive */
 static int sslsock_fd; /**<SSL socket file descriptor, where new secure connection request arrive */
@@ -83,95 +87,12 @@ static SSL_CTX *ssl_context;
 static void connection_cb(EV_P_ ev_io *w, int revents);
 static void ssl_connection_cb(EV_P_ ev_io *w, int revents);
 
-static struct server_info * info;
-static config_t cfg;
-
-/**
- * Using libconfig, this function creates and populates a struct, which is going to hold information about the chosen
- * configuration for this server. If one changes CONFIG_FILE content, this is the only function, apart of the 
- * "struct server_info" in the header file, one needs to adapt.
- * 
- * @warning if you need to mess around with this function, you better take a look at libconfig documentation:
- * 			http://www.hyperrealm.com/libconfig/libconfig_manual.html
- * @return `1` on error; `0` otherwise 
- */
-int loadServerInfo(){
-	config_setting_t *setting;
-	
-	config_init(&cfg);
-	
-	/* Read the configuration file, and check if it was successful*/
-	if(! config_read_file(&cfg, CONFIG_FILE)){
-		perror("::yaircd.c:main(): Server unable to read configuration file.");
-		
-		//debug
-		//fprintf(stderr, "%s:%d - %s\n", config_error_file(&cfg), config_error_line(&cfg), config_error_text(&cfg));
-		
-		config_destroy(&cfg);
-		return 1;
-	}
-	
-	info = malloc(sizeof(struct server_info));
-	info->admin = malloc(sizeof(struct admin_info));
-	info->socket_standard = malloc(sizeof(struct socket_info));
-	info->socket_secure = malloc(sizeof(struct socket_info));
-	
-	if(!info || !info->admin || !info->socket_standard || !info->socket_secure){
-		fprintf(stderr, "::yaircd.c:loadServerInfo(): Could not allocate memory to load server info.\n");
-	}
-	
-	/* Server info */
-	setting = config_lookup(&cfg, "serverinfo");
-	
-	config_setting_lookup_int(setting, "serv_id", &(info->id));
-	config_setting_lookup_string(setting, "serv_name", &(info->name));
-	config_setting_lookup_string(setting, "serv_desc", &(info->description));
-	config_setting_lookup_string(setting, "net_name", &(info->net_name));
-	config_setting_lookup_string(setting, "certificate", &(info->certificate_path));
-	config_setting_lookup_string(setting, "pkey", &(info->private_key_path));
-	
-	/* Admin info */
-	setting = config_lookup(&cfg, "serverinfo.admin");
-	
-	config_setting_lookup_string(setting, "name", &(info->admin->name));
-	config_setting_lookup_string(setting, "nick", &(info->admin->nick));
-	config_setting_lookup_string(setting, "email", &(info->admin->email));
-	
-	/* Standard socket info */
-	setting = config_lookup(&cfg, "listen.sockets.standard");
-	
-	config_setting_lookup_int(setting, "port", &(info->socket_standard->port));
-	config_setting_lookup_int(setting, "max_hangup_clients", &(info->socket_standard->max_hangup_clients));
-	config_setting_lookup_string(setting, "ip", &(info->socket_standard->ip));
-	info->socket_standard->ssl = 0;
-	
-	/* Secure socket info */
-	setting = config_lookup(&cfg, "listen.sockets.secure");
-	
-	config_setting_lookup_int(setting, "port", &(info->socket_secure->port));
-	config_setting_lookup_int(setting, "max_hangup_clients", &(info->socket_secure->max_hangup_clients));
-	config_setting_lookup_string(setting, "ip", &(info->socket_secure->ip));
-	info->socket_secure->ssl = 1;
-	
-	return 0;
-}
-
-/**
- * This is where the mem allocated during the load of the configuration file is freed. You might have noticed
- * we didn't use any buffer while calling config_setting_lookup_TYPE. This means that if you call this function
- * too soon, you might come across a mean, still beautiful, segmentation fault (just if you try to access the info
- * contained in the struct we have populated during the loadServerInfo() call).
- */
-void freeServerInfo(){
-	config_destroy(&cfg);
-} 
-
 /**
  * This is where everything with SSL is initialized
  * @return `1` on error; `0` otherwise 
  * @warning irc clients must use a ssl protocol version compatible with SSLv23
  */
-int initSSL(){
+int initSSL(void) {
 	/* Load encryption and hashing algorithms */
 	SSL_library_init();
  
@@ -201,13 +122,13 @@ int initSSL(){
 	 */
 	
 	/* Load the server certificate into the SSL_CTX structure */
-	if (SSL_CTX_use_certificate_file(ssl_context, info->certificate_path, SSL_FILETYPE_PEM) <= 0) {
+	if (SSL_CTX_use_certificate_file(ssl_context, get_cert_path(), SSL_FILETYPE_PEM) <= 0) {
 		perror("::yaircd.c:main(): Failed to load server certificate into ssl context");
 		return 1;
 	}
 	
 	/* Load the private-key corresponding to the server certificate */
-	if (SSL_CTX_use_PrivateKey_file(ssl_context, info->private_key_path, SSL_FILETYPE_PEM) <= 0) {
+	if (SSL_CTX_use_PrivateKey_file(ssl_context, get_priv_key_path(), SSL_FILETYPE_PEM) <= 0) {
 		perror("::yaircd.c:main(): Failed to load server private-key into ssl context");
 		return 1;
     }
@@ -221,12 +142,11 @@ int initSSL(){
 }
 
 /**
- * This just shuts everything related with SSL down. 
+ * This just shuts down everything related to SSL. 
  */
-void shutSSL(){
+void shutSSL(void) {
 	/* Terminate communication on a socket */
 	close(sslsock_fd);
-	
 	/* Free the SSL_CTX structure */
 	SSL_CTX_free(ssl_context);
 }
@@ -246,8 +166,8 @@ int ircd_boot(void) {
 	struct ev_io socket_watcher;
 	struct ev_io socket_ssl_watcher;
 	
-	if(loadServerInfo()){
-		perror("::yaircd.c:main(): Server unable to load its info.");
+	if (loadServerInfo() != 0) {
+		perror("::yaircd.c:ircd_boot(): Server unable to load configuration file info.");
 		return 1;
 	}
 
@@ -259,33 +179,38 @@ int ircd_boot(void) {
 	act.sa_flags = 0;
 	sigaction(SIGPIPE, &act, NULL);
 	
-	if(initSSL()==1)
-		perror("::yaircd.c:main(): Server unable to support SSL connections due to the previous error.");
+	if (initSSL() == 1) {
+		fprintf(stderr, "::yaircd.c:ircd_boot(): Server unable to support SSL connections.\n");
+	}
 	
 	mainsock_fd = socket(AF_INET, SOCK_STREAM, 0);
 	sslsock_fd = socket(AF_INET, SOCK_STREAM, 0);
 	
 	if (mainsock_fd < 0) {
-		perror("::yaircd.c:main(): Could not create main socket");
+		perror("::yaircd.c:ircd_boot(): Could not create main socket.");
 		return 1;
 	}
-	if(sslsock_fd < 0){
-		perror("::yaircd.c:main(): Could not create ssl socket");
-		/* server can still operate, using the insecure socket*/
+	if (sslsock_fd < 0) {
+		perror("::yaircd.c:ircd_boot(): Could not create ssl socket.");
+		return 1;
 	}
 	
 	memset(&serv_addr, 0, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	
-	/* Store port number in network byte order */
-	serv_addr.sin_port = htons(info->socket_standard->port);
+	if ((serv_addr.sin_addr.s_addr = inet_addr(get_std_socket_ip())) == -1) {
+		fprintf(stderr, "::yaircd.c:ircd_boot(): Invalid socket address.\n");
+		return 1;
+	}
+	serv_addr.sin_port = htons(get_std_socket_port());
 	
 	/* Doing the same for ssl socket*/
 	memset(&ssl_addr, 0, sizeof(ssl_addr));
 	ssl_addr.sin_family = AF_INET;
-	ssl_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	ssl_addr.sin_port = htons(info->socket_secure->port);
+	if ((ssl_addr.sin_addr.s_addr = inet_addr(get_ssl_socket_ip())) == -1) {
+		fprintf(stderr, "::yaircd.c:ircd_boot(): Invalid socket address.\n");
+		return 1;
+	}
+	ssl_addr.sin_port = htons(get_ssl_socket_port());
 	
 	/* Set SO_REUSEADDR. To learn why, see (read the WHOLE answers!):
 		- http://stackoverflow.com/questions/3229860/what-is-the-meaning-of-so-reuseaddr-setsockopt-option-linux
@@ -299,22 +224,22 @@ int ircd_boot(void) {
 		perror("::yaircd.c:main(): Could not set SO_REUSEADDR in ssl socket.\nError summary");
 	}
 	if (bind(mainsock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-		fprintf(stderr, "::yaircd.c:main(): Could not bind on socket with port %d. Please make sure this port is free, and that the IP you're binding to is valid.\n", info->socket_standard->port);
+		fprintf(stderr, "::yaircd.c:main(): Could not bind on socket with port %d. Please make sure this port is free, and that the IP you're binding to is valid.\n", get_std_socket_port());
 		perror("Error summary");
 		close(mainsock_fd);
 		return 1;
 	}
 	if (bind(sslsock_fd, (struct sockaddr *) &ssl_addr, sizeof(ssl_addr)) < 0) {
-		fprintf(stderr, "::yaircd.c:main(): Could not bind on ssl socket with port %d. Please make sure this port is free, and that the IP you're binding to is valid.\n", info->socket_secure->port);
+		fprintf(stderr, "::yaircd.c:main(): Could not bind on ssl socket with port %d. Please make sure this port is free, and that the IP you're binding to is valid.\n", get_ssl_socket_port());
 		perror("Error summary");
 		close(sslsock_fd);
 	}
-	if (listen(mainsock_fd, info->socket_standard->max_hangup_clients) == -1) {
+	if (listen(mainsock_fd, get_std_socket_hangup()) == -1) {
 		perror("::yaircd.c:main(): Could not listen on main socket");
 		close(mainsock_fd);
 		return 1;
 	}
-	if (listen(sslsock_fd, info->socket_secure->max_hangup_clients) == -1) {
+	if (listen(sslsock_fd, get_ssl_socket_hangup()) == -1) {
 		perror("::yaircd.c:main(): Could not listen on ssl socket");
 		close(sslsock_fd);
 	}
@@ -348,11 +273,6 @@ int ircd_boot(void) {
 	
 	/* Now we just have to sit and wait */
 	ev_loop(loop, 0);	
-	
-	shutSSL();
-	
-	freeServerInfo();
-	
 	return 0;
 }
 
@@ -445,7 +365,7 @@ static void accept_connection(int revents, int flags) {
 	/* thread_arguments will be freed inside the new thread at the right time */
 	if (pthread_create(&thread_id, &thread_attr, new_client, (void *) thread_arguments) < 0) {
 		perror("::yaircd.c:accept_connection(): could not create new thread");
-		if(flags & SSL_SOCK){
+		if (flags & SSL_SOCK) {
 			SSL_shutdown(thread_arguments->ssl);
 			SSL_free(thread_arguments->ssl);
 		}

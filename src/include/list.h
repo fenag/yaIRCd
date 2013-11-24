@@ -1,6 +1,30 @@
 #ifndef __YAIRCD_GENERIC_LIST_GUARD__
 #define __YAIRCD_GENERIC_LIST_GUARD__
 
+/** @file
+	@brief Generic thread-safe words container.
+	
+	This file implements a generic thread-safe words container. It uses an underlying trie implementation, and a mutex to control concurrent accesses to this trie.
+	Thus, the functions provided here are nothing more than the same functions offered by the trie implementation, except that everything is wrapped in a structure
+	with accesses controlled by a mutex.
+	
+	Two core functions, `list_find_and_execute()`, and `list_find_and_execute_globalock()`, are provided to perform atomic arbitrary operations on the list items. Besides the global locking mechanism,
+	each node added to a list is packed with a lock just for itself. This allows multiple threads to work on different list elements instead of having to wait for the global lock to become available even if their
+	target node was not being used.
+	
+	`list_find_and_execute()` uses this approach to allow different threads to work on different nodes concurrently, but it shall only be called with functions that won't invoke any deletion or insertion operations. This is
+	necessary because additions and insertions to the list must be controlled by the global locking mechanism, and these functions are not called with a global lock acquired.
+	
+	`list_find_and_execute_globalock()` removes this limitation at the cost of executing the whole operation while holding the global lock. Thus, it is safe for functions to invoke a delete operation on the node they're working
+	on (and only on that node), and the function guarantees that no other threads are waiting to acquire the node's lock once it is deleted in the current thread. See this function's documentation to learn how this is achieved.
+	
+	It is a very interesting and recommendable exercise to go through the trie implementation. Interested readers are invited to look at trie.c.
+	
+	@author Filipe Goncalves
+	@date November 2013
+	@see trie.c
+*/
+
 /** Constant value used to indicate that it is desired to free a node's data when invoking `destroy_word_list()` */
 #define LIST_FREE_NODE_DATA 1
 

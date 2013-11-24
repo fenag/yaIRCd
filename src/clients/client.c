@@ -138,11 +138,8 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents) {
 }
 
 /** Creates a new client instance that will be used throughout this client's lifetime.
-	@param ip_addr Pointer to a characters sequence describing this client's ip address
-	@param socket Socket descriptor for this client.
-	@param ssl An SSL structure for this client's connection. If the client is not using SSL, this parameter must be `NULL`.
+	@param args A pre-filled arguments wrapper with appropriate information. See the documentation for `struct irc_client_args_wrapper` for further information.
 	@return `NULL` if there aren't enough resources to create a new client; otherwise, pointer to `struct irc_client` for this user.
-	@warning `ip_addr` is used as is; no string duplication happens.
 */
 static struct irc_client *create_client(struct irc_client_args_wrapper *args) {
 	struct irc_client *new_client;

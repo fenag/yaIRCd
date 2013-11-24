@@ -96,6 +96,16 @@ void yaircd_send(struct irc_client *client, const char *fmt, ...) {
 	}
 }
 
+/** Works pretty much the same way as `sprintf()`, but it never returns a number greater than or equal to `size`. As a consequence,
+	when the output is truncated, the buffer is terminated with CR LF, and the rest of the output is discarded.
+	Typically, `size` will be `MAX_MSG_SIZE+1`, to allow for a null terminator.
+	Since this function uses `vsnprintf()` internally, the buffer is always null terminated.
+	@param buf Output buffer
+	@param size How many characters, at most, can be written in `buf`
+	@param msg Format string with the same syntax as every `printf()` family function
+	@param ... Optional arguments matching the format string
+	@return A number less than `size` indicating how many characters, excluding the null terminator, were written.
+*/
 int cmd_print_reply(char *buf, size_t size, const char *msg, ...) {
 	int ret;
 	va_list args;
@@ -103,9 +113,9 @@ int cmd_print_reply(char *buf, size_t size, const char *msg, ...) {
 	ret = vsnprintf(buf, size, msg, args);
 	va_end(args);
 	if (ret >= size) {
-		buf[size-1] = '\n';
-		buf[size-2] = '\r';
-		ret = size;
+		buf[size-2] = '\n';
+		buf[size-3] = '\r';
+		ret = size-1;
 	}
 	return ret;
 }
@@ -286,6 +296,12 @@ void send_err_notonchannel(struct irc_client *client, char *chan) {
 		"development.yaircd.org", client->nick, chan);
 }
 
+/** Sends a generic PRIVMSG command notification to a given target. The destination can either be a channel or a user.
+	@param from The message's author
+	@param to Message's recipient. This can be the other end of a private conversation, or it can be a regular channel user receiving a message on a channel.
+	@param dest The destination of the message. If it is a private conversation, it will just be `to`'s nickname; otherwise, it is the channel name.
+	@param msg The message to deliver.
+*/
 void notify_privmsg(struct irc_client *from, struct irc_client *to, char *dest, char *msg) {
 	char message[MAX_MSG_SIZE+1];
 	const char *format =

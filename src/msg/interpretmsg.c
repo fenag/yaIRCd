@@ -37,6 +37,12 @@ static void *privmsg_cmd(void *target_client, void *args) {
 	return NULL;
 }
 
+/** Callback function used by `client_list_find_and_execute()` when a client issues a WHOIS command.
+	This function generates and sends the appropriate WHOIS reply
+	@param target_client Client being WHOIS'ed
+	@param args A parameter of type `struct cmd_parse *` holding information previously obtained by the messages parsing routine.
+	@return This function always returns `NULL`.
+*/
 static void *whois_cmd(void *target_client, void *args) {
 	struct cmd_parse *info = (struct cmd_parse *) args;
 	struct irc_client *target = (struct irc_client *) target_client;

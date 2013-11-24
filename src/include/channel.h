@@ -1,6 +1,17 @@
 #ifndef __YAIRCD_CHANNEL_GUARD__
 #define __YAIRCD_CHANNEL_GUARD__
 
+/** @file
+	@brief Channels management module
+	
+	This file declares a set of functions used to manage channel commands other than PRIVMSG, such as joins, parts, kicks, modes, etc.
+	For PRIVMSG, since the syntax is basically the same as private messages between 2 users, we delegate this work to `notify_privmsg()`.
+	A thread-safe channel list is kept. With the exception of `chan_init()` and `chan_destroy()`, it is safe to call every function declared in this header file concurrently.
+	
+	@author Filipe Goncalves
+	@date November 2013
+*/
+
 /** Returned by `do_join()` when there isn't enough memory to create a new channel */
 #define CHAN_NO_MEM 1
 

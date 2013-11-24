@@ -238,6 +238,12 @@ void *find_word_trie(struct trie_t *trie, char *word) {
 	return find_word_trie_aux(trie->root, word, trie);
 }
 
+/** `trie_for_each()` auxiliary implementation. This function recursively traverses a trie using a DFS approach on a node's edges.
+	@param trie The trie being traversed
+	@param node Current node being considered
+	@param f A pointer to a function that shall be called if `node` is the end of a word. This function will be passed the node's previously associated data as the first parameter, and `fargs` as second parameter.
+	@param fargs Passed as second parameter to `f`.
+*/
 static void trie_for_each_aux(struct trie_t *trie, struct trie_node *node, void (*f)(void *, void *), void *fargs) {
 	int i;
 	if (node->is_word) {
@@ -250,6 +256,14 @@ static void trie_for_each_aux(struct trie_t *trie, struct trie_node *node, void 
 	}
 }
 
+/** Iterates through every element in a trie, and calls an arbitrary function to perform work on that element.
+	Elements are traversed lexicographically relative to each character's ID. For example, a direct mapping from character to integer will make
+	`aaaa` be visited immediately before `aaab`, but a mapping such that a character `c` is mapped to `&lsquo;z&rsquo;-c+&lsquo;a&rsquo;` will cause it to traverse elements
+	in descending lexicographic order.
+	@param trie The trie instance.
+	@param f A pointer to a function that will be called for each trie element. The first parameter is the data previously stored for that element; the second parameter is `fargs`.
+	@param fargs A generic pointer to some data that will be passed as the second parameter when calling `f`.
+*/
 void trie_for_each(struct trie_t *trie, void (*f)(void *, void *), void *fargs) {
 	trie_for_each_aux(trie, trie->root, f, fargs);
 }
@@ -306,6 +320,7 @@ static inline struct trie_node_stack_elm *trie_push(struct trie_node_stack *st, 
 		   for future searches to continue. However, this error condition does not affect this function's correctness: `TRIE_NO_MEM` only implies that an on going search will not be able to find every possible match
 		   for a given prefix, since it cannot store new state information. Note that it can use old state information stored in previous calls, and will continue to do so even after `TRIE_NO_MEM` is signalized.
 		   Thus, it is always safe to use this function's result when it returns someting that is not `NULL`, but when `TRIE_NO_MEM` is reported, it is not guaranteed that every match will be found.
+	@param data If a match was found (i.e., if `NULL` was not returned), `*data` will hold a generic pointer to the data previously associated to the word `result`.
 	@return State information for the next call; `NULL` if no more matches were found. If `NULL` is returned, `result` may have been written, but its contents are meaningless, and it is not guaranteed to be null-terminated.
 	@warning If this function returns `NULL`, the contents of `result` are undefined.
 	@warning This function does not free state information when it returns `NULL`. Thus, the caller is required to save `st` in an auxiliary variable. If the same variable is used, then the reference to the last
@@ -364,6 +379,7 @@ void free_trie_stack(struct trie_node_stack *st);
 		   for a given prefix, since it cannot store new state information. Note that it can use old state information stored in previous calls, and will continue to do so even after `TRIE_NO_MEM` is signalized.
 		   Thus, it is always safe to use this function's result when it returns someting that is not `NULL`, but when `TRIE_NO_MEM` is reported, it is not guaranteed that every match will be found.
 		   This error can be reported even in the first call to this function.
+	@param data If a match was found (i.e., if `NULL` was not returned), `*data` will hold a generic pointer to the data previously associated to the word `result`.
 	@warning `result` may have been modified even if `NULL` was returned. In this case, its content is undefined.
 	@warning `prefix` must be a characters sequence such that `strlen(prefix) <= depth-1`. Ignoring this requirement leads to buffer overflows when writing to `result`.
 	@warning This function will have undefined behavior if it is called with a state `st` that holds information for a `prefix`, but in the meantime, words were removed that matched `prefix`. The caller must ensure that

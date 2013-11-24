@@ -24,7 +24,7 @@
 	thus allowing for a specific user ban in a channel. As a convention, we also prepend cloaked hosts with the net prefix and a hyphen. The net prefix is configured in the server's conf file, 
 	it's just a regular string describing the network that will be prefixed to cloaked hosts coming from reverse looked up hostnames. Thus, assuming the next prefix is "ex", in our example, the final result would be
 	`ex-downsample(md5(md5(KEY1:bl-11-252-66-85.dsl.telepac.pt:KEY2)+KEY3)).dsl.telepac.pt`. Because the result of evaluating `downsample()` is printed as a hexadecimal number, a possible result would be:
-	´ex-B700B718.dsl.telepac.pt`.
+	`ex-B700B718.dsl.telepac.pt`.
 	The common part of the host is assumed to be everything after the first dot, which in this case is `.dsl.telepac.pt`. Including this allows for range bans like
 	`*!*@*.dsl.telepac.pt`, or `*!*@*.telepac.pt`, or even `*!*@*.pt`. Note that `*!*@*.pt` will ban every user with a reverse looked up hostname from Portugal, but portuguese users that don't have reverse lookup are still
 	able to join.
@@ -59,6 +59,7 @@
 
 /* TODO - make this configurable, i.e., allow the administrator to choose the keys using the conf file.
    To do so, we will have to create an init() function here that stores a copy of the 3 keys and computes its length once.
+   We also don't document this, because it will soon be moved to the configuration files. Ignore doxygen warnings about this file.
  */
 static char *key1 = "aldkfghAVAVDHFNGJNmddjfj3356778498";
 static int key1_len = 34;
