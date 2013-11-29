@@ -17,7 +17,7 @@
 	@date November 2013
 */
 
-struct irc_message;
+
 /** The structure that describes an IRC client */
 struct irc_client {
 	struct ev_io io_watcher; /**<io watcher for this client's socket. This watcher will be responsible for calling the appropriate callback function when there is interesting data to read from the socket. */

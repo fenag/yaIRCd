@@ -23,5 +23,6 @@ struct cmd_parse {
 };
 
 /* Documented in source file */
-int interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size);
+int cmds_init(void);
+void interpret_msg(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size);
 #endif /* __INTERPRET_MSG_GUARD__ */

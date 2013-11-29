@@ -62,8 +62,8 @@ static struct trie_node *init_node(int edges)
    @param edges How many edges each node is allowed to have, that is, the size of this trie's alphabet.
    @return A new trie instance with no words, or `NULL` if there isn't enough memory to create a trie.
  */
-struct trie_t *init_trie(void (*free_function)(void *, void *), int (*is_valid)(char), char (*pos_to_char)(
-				 int), int (*char_to_pos)(char), int edges)
+struct trie_t *init_trie(void (*free_function)(void *, void *), int (*is_valid)(char), 
+						 char (*pos_to_char)(int), int (*char_to_pos)(char), int edges)
 {
 	struct trie_t *trie;
 	if ((trie = malloc(sizeof(struct trie_t))) == NULL) {

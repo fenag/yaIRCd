@@ -30,11 +30,6 @@
    @todo Implement timeouts
  */
 
-/** Global async watcher used to notify threads that messages are waiting to be written into a client's socket.
-   The watcher is global, but each client's thread uses it to wake up different event loops corresponding to different
-      clients.
- */
-
 static void manage_client_messages(EV_P_ ev_io *watcher, int revents);
 void destroy_client(void *arg);
 static void free_client(struct irc_client *client);
@@ -133,12 +128,13 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents)
 	while ((msg_size = next_msg(&client->last_msg, &msg_in)) != MSG_CONTINUE) {
 		if (msg_size == 0 || (msg_size == 1 && msg_in[msg_size - 1] == '\r')) {
 			/* Silently ignore empty messages */
+			printf("EMPTY MSG\n");
 			continue;
 		}
 		/* Handle clients which terminate messages with \n and clients that use \r\n */
 		if (msg_size >= 1 && msg_in[msg_size - 1] == '\r') {
 			msg_in[msg_size - 1] = '\0';
-		}else  {
+		} else {
 			msg_in[msg_size] = '\0';
 		}
 		printf("Got new message: %s\n", msg_in);
@@ -147,9 +143,7 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents)
 			send_err_unknowncommand(client, "");
 			continue;
 		}
-		if (interpret_msg(client, prefix, cmd, params, params_no) == 1) {
-			/* Disconnect client */
-		}
+		interpret_msg(client, prefix, cmd, params, params_no);
 	}
 }
 
@@ -191,6 +185,7 @@ static struct irc_client *create_client(struct irc_client_args_wrapper *args)
 	new_client->nick = NULL;
 	new_client->username = NULL;
 	new_client->hostname = NULL;
+	new_client->public_host = NULL;
 	initialize_irc_message(&new_client->last_msg);
 
 	yaircd_send(new_client, ":%s NOTICE AUTH :*** Looking up your hostname...\r\n", get_server_name());
@@ -296,7 +291,7 @@ static void queue_async_cb(EV_P_ ev_async *w, int revents)
  */
 void destroy_client(void *arg)
 {
-	struct irc_client *client = (struct irc_client*)arg;
+	struct irc_client *client = (struct irc_client *) arg;
 	/* First, we HAVE to delete this client from the clients list, no matter what.
 	   Why? Because if we delete him, we know for sure that no other thread will be able to reach him and
 	   issue client_enqueue() commands on this guy. List accesses are thread safe; other clients using the list to
@@ -329,6 +324,7 @@ static void free_client(struct irc_client *client)
 	free(client->nick);
 	free(client->username);
 	free(client->server);
+	free(client->public_host);
 	if (client_queue_destroy(&client->write_queue) == -1) {
 		fprintf(stderr, "Warning: client_queue_destroy() reported an error - THIS SHOULD NEVER HAPPEN!\n");
 	}
@@ -337,7 +333,11 @@ static void free_client(struct irc_client *client)
 	//SSL_free(client->ssl);
 	//}
 	close(client->socket_fd);
-	ev_io_stop(client->ev_loop, &client->io_watcher); /* Stop the callback mechanism */
+	
+	/* Stop the callback mechanism for this client */
+	ev_io_stop(client->ev_loop, &client->io_watcher);
+	ev_async_stop(client->ev_loop, &client->async_watcher);
+	
 	ev_break(client->ev_loop, EVBREAK_ONE); /* Stop iterating */
 	ev_loop_destroy(client->ev_loop);
 	free(client);

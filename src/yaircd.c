@@ -17,6 +17,7 @@
 #include "client_list.h"
 #include "channel.h"
 #include "serverinfo.h"
+#include "interpretmsg.h"
 
 /**
    @file
@@ -291,6 +292,11 @@ int ircd_boot(void)
 
 	if (chan_init() == -1) {
 		fprintf(stderr, "::yaircd.c:main(): Unable to initialize channels list.\n");
+		return 1;
+	}
+	
+	if (cmds_init() == -1) {
+		fprintf(stderr, "::yaircd.c:main(): Unable to initialize server commands list.\n");
 		return 1;
 	}
 
