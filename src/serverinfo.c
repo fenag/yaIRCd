@@ -5,6 +5,7 @@
 
 /** @file
    @brief Main server structures
+   
    This file contains the main structs used to store essential information for the server to run properly, and
       implements the functions to read the file and store data.
    Every access to server information should be done through the use of functions defined in here.

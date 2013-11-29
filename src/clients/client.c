@@ -223,7 +223,7 @@ static struct irc_client *create_client(struct irc_client_args_wrapper *args)
 				return NULL;
 			}
 		}
-		if ((new_client->public_host = hide_userhost(new_client)) == NULL) {
+		if ((new_client->public_host = (new_client->host_reversed ? hide_host(new_client->hostname) : hide_ipv4(new_client->hostname))) == NULL) {
 			free(new_client->hostname);
 			ev_loop_destroy(new_client->ev_loop);
 			free(new_client);

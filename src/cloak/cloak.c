@@ -99,7 +99,7 @@ static void do_md5(const char *salt1,
 		   size_t text_len,
 		   unsigned char result[MD5_DIGEST_LENGTH])
 {
-	char buf1[salt1_len + salt2_len + text_len + 2]; /* +2 because we need space for ':' twice */
+	char buf1[salt1_len + salt2_len + text_len + 2]; /* +2 because we need space for two ':' */
 	char buf2[MD5_DIGEST_LENGTH + salt3_len];
 	strncpy(buf1, salt1, salt1_len);
 	buf1[salt1_len] = ':';
@@ -159,7 +159,7 @@ static unsigned int downsample(unsigned char hash[MD5_DIGEST_LENGTH])
       user. If there isn't enough memory available, `NULL` is returned.
    The caller is responsible for freeing the returned pointer.
  */
-static char *hide_ipv4(char *host)
+char *hide_ipv4(char *host)
 {
 	unsigned char alpha[MD5_DIGEST_LENGTH];
 	unsigned char beta[MD5_DIGEST_LENGTH];
@@ -189,7 +189,7 @@ static char *hide_ipv4(char *host)
       user. If there isn't enough memory available, `NULL` is returned. The caller is responsible for freeing the
       returned pointer.
  */
-static char *hide_host(char *host)
+char *hide_host(char *host)
 {
 	unsigned char alpha[MD5_DIGEST_LENGTH];
 	char *p;
@@ -202,16 +202,4 @@ static char *hide_host(char *host)
 		;  /* Intentionally left blank */
 	snprintf(result, sizeof(result), "%s-%X%s", get_cloak_net_prefix(), downsample(alpha), *p == '\0' ? "" : p);
 	return strdup(result);
-}
-
-/** Hides a user host, such that it is still possible to match this client using wildcards (on the cloaked hosts), but
-   no information about his real address is leaked.
-   @param client The client to hide. `client->hostname` shall hold this client's currently known hostname, which can be
-      a reverse looked up host, or a regular IP address.
-   @return A pointer to a dynamically allocated null terminated characters sequence with the cloaked host. The caller is
-      responsible for freeing this pointer when it is no longer needed. If no memory is available, `NULL` is returned.
- */
-char *hide_userhost(struct irc_client *client)
-{
-	return client->host_reversed ? hide_host(client->hostname) : hide_ipv4(client->hostname);
 }

@@ -22,6 +22,7 @@
 */
 
 /* Documented in C source file */
-char *hide_userhost(struct irc_client *client);
+char *hide_ipv4(char *host);
+char *hide_host(char *host);
 
 #endif /* __IRC_CLOAK_GUARD__ */

@@ -180,15 +180,34 @@ void shutSSL(void)
 	SSL_CTX_free(ssl_context);
 }
 
-/** The core. This function sets it all up. It creates the main socket, assigning it to `mainsock_fd`, and fills
-   `serv_addr` with the necessary fields.
-   Currently, configuration files are not supported, so the socket created listens on all IPs on port 6667.
-   The threads attributes variable, `thread_attr` is initialized with `PTHREAD_CREATE_DETACHED`, since we won't be
-      joining any thread.
-   The main socket is not polled for new clients; instead, `libev` is used with a watcher that calls `connection_cb`
-      when a new connection request arrives. Default events loop is used.
-   @return `1` on error; `0` otherwise
-   @todo Think about IRCd logging features
+/** Initializes the server's data structures. As of this writing, these include the clients list, channels list, and commands list. The clients list is managed by client_list.c, the channels list by channel.c, and the commands list by interpretmsg.c.
+@return `0` on success; `-1` if an error occurred, typically indicating a resource allocation problem.
+*/
+int init_data_structures(void) {
+	if (client_list_init() == -1) {
+		fprintf(stderr, "::yaircd.c:init_data_structures(): Unable to initialize clients list.\n");
+		return -1;
+	}
+
+	if (chan_init() == -1) {
+		fprintf(stderr, "::yaircd.c:init_data_structures(): Unable to initialize channels list.\n");
+		return -1;
+	}
+
+	if (cmds_init() == -1) {
+		fprintf(stderr, "::yaircd.c:init_data_structures(): Unable to initialize server commands list.\n");
+		return -1;
+	}
+	return 0;
+}
+
+/** The core. This function sets it all up. 
+The first step is to load the server information. This information is read from the configuration file and stored in a way that is accessible through the functions defined in serverinfo.h
+Then, SIGPIPE is disabled, to prevent any misbehaved client's connection from bringing our server down. It creates the main socket, assigning it to `mainsock_fd`, as well as the secure socket (`sslsock_fd`), and fills `serv_addr` with the necessary fields. Both sockets are created with the option `SO_REUSEADDR`
+The threads attributes variable, `thread_attr` is initialized with `PTHREAD_CREATE_DETACHED`, since we won't be joining any thread. The main socket is not polled for new clients; instead, `libev` is used with a watcher that calls `connection_cb` when a new connection request arrives. Default events loop is used.
+The server's data structures, such as clients list, channels list, commands list, etc, are all initialized before the socket starts accepting new connections.
+@return `1` on error; `0` otherwise
+@todo Think about IRCd logging features
  */
 int ircd_boot(void)
 {
@@ -285,18 +304,7 @@ int ircd_boot(void)
 	}
 
 	/* Initialize data structures */
-	if (client_list_init() == -1) {
-		fprintf(stderr, "::yaircd.c:main(): Unable to initialize clients list.\n");
-		return 1;
-	}
-
-	if (chan_init() == -1) {
-		fprintf(stderr, "::yaircd.c:main(): Unable to initialize channels list.\n");
-		return 1;
-	}
-
-	if (cmds_init() == -1) {
-		fprintf(stderr, "::yaircd.c:main(): Unable to initialize server commands list.\n");
+	if (init_data_structures() == -1) {
 		return 1;
 	}
 

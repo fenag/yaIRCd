@@ -31,13 +31,12 @@ static Word_list_ptr clients;
  */
 int nick_is_valid(char s)
 {
-	return((s >= 'a' &&
-		s <= 'z') ||
-	       (s >= 'A' &&
-		s <=
-		'Z') || s == '-' || s == '[' || s == ']' || s == '\\' || s == '`' || s == '^' || s == '{' || s ==
-	       '}' ||
-	       s == '|');
+	return
+		((s >= 'a' && s <= 'z') ||
+		 (s >= 'A' && s <= 'Z') || 
+		 s == '-' || s == '[' || s == ']' || 
+		 s == '\\' || s == '`' || s == '^' ||
+		 s == '{' || s == '}' || s == '|');
 }
 
 /** Translates from an ID of a special character (a character not in `[a-z]` back to its corresponding character.
@@ -46,7 +45,7 @@ int nick_is_valid(char s)
  */
 static inline char special_id_to_char(int i)
 {
-	return(i == 0 ? '-' : i == 1 ? '{' : i == 2 ? '}' : i == 3 ? '|' : i == 4 ? '`' : i == 5 ? '^' : -1);
+	return (i == 0 ? '-' : i == 1 ? '{' : i == 2 ? '}' : i == 3 ? '|' : i == 4 ? '`' : i == 5 ? '^' : -1);
 }
 
 /** Converts a character ID back into its corresponding character.
@@ -55,7 +54,7 @@ static inline char special_id_to_char(int i)
  */
 char nick_pos_to_char(int i)
 {
-	return((char)((i < NICK_ALPHABET_SIZE) ? ('a' + i) : special_id_to_char(i - NICK_ALPHABET_SIZE)));
+	return ((char)((i < NICK_ALPHABET_SIZE) ? ('a' + i) : special_id_to_char(i - NICK_ALPHABET_SIZE)));
 }
 
 /** Translates from a special character (a character not in `[a-z]` into its ID.
@@ -64,8 +63,8 @@ char nick_pos_to_char(int i)
  */
 static inline int special_char_id(char s)
 {
-	return(s == '-' ? 0 : s == '[' || s == '{' ? 1 : s == ']' || s == '}' ? 2 : s == '\\' || s == '|' ? 3 : s ==
-	       '`' ? 4 : s == '^' ? 5 : -1);
+	return (s == '-' ? 0 : s == '[' || s == '{' ? 1 : s == ']' || s == '}' ? 2 : s == '\\' || 
+			s == '|' ? 3 : s == '`' ? 4 : s == '^' ? 5 : -1);
 }
 
 /** Converts a character into its ID
@@ -74,9 +73,9 @@ static inline int special_char_id(char s)
  */
 int nick_char_to_pos(char s)
 {
-	return(((s >= 'a' &&
-		 (s) <= 'z') ||
-		(s >= 'A' && s <= 'Z')) ? tolower((unsigned char)s) - 'a' : NICK_ALPHABET_SIZE + special_char_id(s));
+	return (((s >= 'a' && (s) <= 'z') || (s >= 'A' && s <= 'Z')) ?
+				tolower((unsigned char)s) - 'a' :
+				NICK_ALPHABET_SIZE + special_char_id(s));
 }
 
 /** Initializes clients list.
