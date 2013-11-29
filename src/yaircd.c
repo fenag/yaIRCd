@@ -101,14 +101,14 @@
 static int mainsock_fd; /**<Main socket file descriptor, where new insecure connection request arrive */
 static int sslsock_fd; /**<SSL socket file descriptor, where new secure connection request arrive */
 static struct sockaddr_in serv_addr; /**<This node's address, namely, the IP and port where we will be listening for new
-                                       standard connections. */
+                                        standard connections. */
 static struct sockaddr_in ssl_addr; /**<This node's address, namely, the IP and port where we will be listening for new
-                                      secure connections. */
+                                       secure connections. */
 static pthread_attr_t thread_attr; /**<Threads creation attributes. We use detached threads, since we're not interested
-                                     in calling `pthread_join()`. */
+                                      in calling `pthread_join()`. */
 
 static const SSL_METHOD *ssl_method; /**<Openssl's structure holding information about the specific SSL protocol used.
-                                       This code uses SSLv23 method. */
+                                        This code uses SSLv23 method. */
 static SSL_CTX *ssl_context; /**<The SSL context for the main ssl socket, as required by the OpenSSL library. */
 
 static void connection_cb(EV_P_ ev_io *w, int revents);
@@ -294,7 +294,7 @@ int ircd_boot(void)
 		fprintf(stderr, "::yaircd.c:main(): Unable to initialize channels list.\n");
 		return 1;
 	}
-	
+
 	if (cmds_init() == -1) {
 		fprintf(stderr, "::yaircd.c:main(): Unable to initialize server commands list.\n");
 		return 1;
@@ -410,7 +410,7 @@ static void accept_connection(int revents, int flags)
 			free_thread_arguments(thread_arguments);
 			return;
 		}
-	}else  {
+	}else {
 		thread_arguments->ssl = NULL;
 	}
 

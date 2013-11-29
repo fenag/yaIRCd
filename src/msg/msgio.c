@@ -84,7 +84,7 @@ void yaircd_send(struct irc_client *client, const char *fmt, ...)
 				bufp = 0;
 			}
 			buffer[bufp++] = *ptr++;
-		}else  {
+		}else {
 			ptr += 2;
 			str = va_arg(args, char *);
 			if (bufp == sizeof(buffer) - 1) {

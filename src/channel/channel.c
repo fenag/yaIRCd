@@ -29,7 +29,7 @@
 #define CHANNEL_ALPHABET_SIZE (UCHAR_MAX + 1)
 
 /** This structure represents a channel user. We will store instances of this structure associated to each nick in the
-  channel in a trie */
+   channel in a trie */
 struct chan_user {
 	unsigned modes; /**<This user's status in the channel */
 	struct irc_client *user; /**<Pointer to this user's client structure */

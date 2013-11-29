@@ -69,7 +69,7 @@
 #define BITS_IN_HEXA 4
 
 /** Maximum length of a cloaked host corresponding to a reverse looked up hostname. Used as buffer size for
-  `hide_host()` */
+   `hide_host()` */
 #define MAX_HOST_LEN 128
 
 /** Takes 3 salt keys and a text, and stores `md5(md5(salt1+":"text+":"+salt2)+salt3)` into `result`.

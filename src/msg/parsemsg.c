@@ -75,7 +75,7 @@ static int read_params(char *buf, char *params[MAX_IRC_PARAMS])
 		params[pos++] = buf;
 		if (*next == '\0') {
 			buf = next;
-		}else  {
+		}else {
 			buf = next + 1;
 			*next = '\0';
 		}
@@ -84,7 +84,7 @@ static int read_params(char *buf, char *params[MAX_IRC_PARAMS])
 		/* We allow for spaces after ':' in the parameters list. The RFC does not; but this is harmless :) */
 		if (pos < MAX_IRC_PARAMS) {
 			params[pos++] = buf;
-		}else  {
+		}else {
 			return -1;
 		}
 	}
@@ -157,10 +157,10 @@ int parse_msg(char *buf, char **prefix, char **cmd, char *params[MAX_IRC_PARAMS]
 		    (*(current + 3) == '\0' || *(current + 3) == ' ')) {
 			*cmd = current;
 			next = current + 3;
-		}else  {
+		}else {
 			return -1;
 		}
-	}else  {
+	}else {
 		for (next = current; *next != '\0' && isalpha((unsigned char)*next); next++)
 			;  /* Intentionally left blank */
 		if (*next != '\0' && *next != ' ') {
@@ -280,7 +280,7 @@ int next_msg(struct irc_message *client_msg, char **msg)
 		client_msg->last_stop = client_msg->index;
 		client_msg->msg_begin = 0;
 		return MSG_CONTINUE;
-	}else  {
+	}else {
 		/* Wooho, a new message! */
 		len = i - client_msg->msg_begin;
 		*msg = client_msg->msg + client_msg->msg_begin;

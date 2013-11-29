@@ -34,7 +34,7 @@ struct yaircd_list {
 	pthread_mutex_t mutex; /**<Mutex to synchronize concurrent access to this list */
 	struct trie_t *trie; /**<The underlying list implementation. A trie is used to associate words to data. */
 	void (*free_func)(void *); /**<Pointer to a function that knows how to free a generic data type stored in this
-	                             list by the code using this module. */
+	                              list by the code using this module. */
 };
 
 /** This is what we associate to each word stored. Each word is denoted a node; the trie allows association of a generic
@@ -53,10 +53,10 @@ struct yaircd_node {
 };
 
 /** Wrapper structure to hold arguments to pass to `free_yaircd_node()`. See `destroy_word_list()` and `list_delete()`
-  for further information. */
+   for further information. */
 struct destroy_args_wrapper {
 	int free_data; /**<Did the original caller want to free data? This will either be `LIST_FREE_NODE_DATA` or
-	                 `LIST_NO_FREE_NODE_DATA`. */
+	                  `LIST_NO_FREE_NODE_DATA`. */
 	void (*free_func)(void *); /**<Original freeing function passed to `init_word_list()`. */
 };
 
@@ -351,7 +351,7 @@ int list_add_nolock(Word_list_ptr list, void *data, char *word)
 	new_node->data = data;
 	if (find_word_trie(list->trie, word) != NULL) {
 		return LST_ALREADY_EXISTS;
-	}else  {
+	}else {
 		return add_word_trie(list->trie, word, new_node);
 	}
 	if (ret == TRIE_INVALID_WORD || ret == TRIE_NO_MEM || ret == LST_ALREADY_EXISTS) {
@@ -391,7 +391,7 @@ int list_add(Word_list_ptr list, void *data, char *word)
 	pthread_mutex_lock(&list->mutex);
 	if (find_word_trie(list->trie, word) != NULL) {
 		ret = LST_ALREADY_EXISTS;
-	}else  {
+	}else {
 		ret = add_word_trie(list->trie, word, new_node);
 	}
 	pthread_mutex_unlock(&list->mutex);

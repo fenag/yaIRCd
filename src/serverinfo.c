@@ -23,7 +23,7 @@ struct socket_info {
 	int port; /**<Port number. Typically, greater than 1024, since we're not running as root (I hope!) */
 	unsigned ssl : 1; /**<Bit-field indicating if it's an SSL socket. */
 	int max_hangup_clients; /**<Max. hangup clients allowed to be on hold while the parent thread dispatches a new
-	                          thread to deal with a freshly arrived connection */
+	                           thread to deal with a freshly arrived connection */
 };
 
 /** Holds personal information about the server's administrator. */
@@ -36,10 +36,10 @@ struct admin_info {
 /** Holds necessary information for the cloaking module */
 struct cloaks_info {
 	const char *net_prefix; /**<Network prefix. This string is concatenated to a hyphen and prepended to every
-	                          cloaked host resulting from a reverse hostname. */
+	                           cloaked host resulting from a reverse hostname. */
 	const char *keys[3]; /**<Array of salt keys for the cloaking module. */
 	size_t keys_length[3]; /**<Length of each of the salt keys. Since this never changes during execution, we
-	                         compute it once when we parse the file, and store it here. */
+	                          compute it once when we parse the file, and store it here. */
 };
 
 /** Structure to store general information about the server read from the configuration file */
@@ -49,12 +49,12 @@ struct server_info {
 	const char *description; /**<Description - shows up in a /WHOIS command */
 	const char *net_name; /**<Network name */
 	int socket_max_hangup_clients; /**<Max. hangup clients allowed to be on hold while the parent thread dispatches
-	                                 a new thread to deal with a freshly arrived connection */
+	                                  a new thread to deal with a freshly arrived connection */
 	struct admin_info admin; /**<Server administrator info. See the documentation for `struct admin_info`. */
 	struct socket_info socket_standard; /**<Information about the standard (plaintext) socket. See the documentation
-	                                      for `struct socket_info`. */
+	                                       for `struct socket_info`. */
 	struct socket_info socket_secure; /**<Information about the secure (SSL) socket. See the documentation for
-	                                    `struct socket_info`. */
+	                                     `struct socket_info`. */
 	struct cloaks_info cloaking; /**<Cloaked hosts information. See the documentation for `struct cloaks_info`. */
 	const char *certificate_path; /**<File path for the certificate file used for secure connections. */
 	const char *private_key_path; /**<File path for the server's private key. */

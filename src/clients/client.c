@@ -213,7 +213,7 @@ static struct irc_client *create_client(struct irc_client_args_wrapper *args)
 				free_thread_arguments(args);
 				return NULL;
 			}
-		}else  {
+		}else {
 			yaircd_send(new_client, ":%s NOTICE AUTH :*** Found your hostname.\r\n", get_server_name());
 			new_client->host_reversed = 1;
 			if ((new_client->hostname = strdup(hostbuf)) == NULL) {
@@ -291,7 +291,7 @@ static void queue_async_cb(EV_P_ ev_async *w, int revents)
  */
 void destroy_client(void *arg)
 {
-	struct irc_client *client = (struct irc_client *) arg;
+	struct irc_client *client = (struct irc_client*)arg;
 	/* First, we HAVE to delete this client from the clients list, no matter what.
 	   Why? Because if we delete him, we know for sure that no other thread will be able to reach him and
 	   issue client_enqueue() commands on this guy. List accesses are thread safe; other clients using the list to
@@ -333,11 +333,11 @@ static void free_client(struct irc_client *client)
 	//SSL_free(client->ssl);
 	//}
 	close(client->socket_fd);
-	
+
 	/* Stop the callback mechanism for this client */
 	ev_io_stop(client->ev_loop, &client->io_watcher);
 	ev_async_stop(client->ev_loop, &client->async_watcher);
-	
+
 	ev_break(client->ev_loop, EVBREAK_ONE); /* Stop iterating */
 	ev_loop_destroy(client->ev_loop);
 	free(client);
