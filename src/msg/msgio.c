@@ -46,63 +46,41 @@ inline ssize_t read_from_noerr(struct irc_client *client, char *buf, size_t len)
 }
 
 /** A printf equivalent version for yaIRCd that sends a set of arbitrarily long IRC messages into a client's socket.
-   This function shall be called everytime a new message is to be written to a client. No other functions in the entire
-      IRCd can write to a client's socket.
-   It is an abstraction to the sockets interface. The internal implementation uses a buffer capable of storing a message
-      with at most `MAX_MSG_SIZE` characters. If data to be delivered is biggerthan the buffer size, this function will
-      break it up in blocks of `MAX_MSG_SIZE` characters and write them one by one into the client's socket.
-   Thus, this abstraction allows anyone to call this function with a format string arbitrarily long. The format string
-      can hold multiple IRC messages.
-   The primary role for this function is to minimize the number of `write()` syscalls. It is imperative that the code
-      using this function tries to pass as many data as it can at the moment, so that bigchunks of information are sent.
+	Note that when expanding the format string, which is done inside `snprintf()`, each IRC message can expand to something bigger than `MAX_MSG_SIZE`.
+	It is the upper code's responsability to ensure this doesn't happen. Not that that's a problem, it's just that it's a little bit annoying for the client
+	to receive messages that exceed the limits defined in the protocol.
+	This function never overflows, since it uses two levels of buffers: first, a buffer of size `MAX_MSG_SIZE` is attempted; if that isn't enough, a buffer of the exact needed
+	size is dynamically allocated, the resulting string is generated and printed to this buffer, sent to the client, and freed.
    @param client The client to send information to
-   @param fmt The format string, pretty much like printf. However, only the `%s` formatter is supported.
-   @param ... Optional parameters to match `%s` formatters.
+   @param fmt The format string, pretty much like printf.
+   @param ... Optional parameters to match formatters.
    @warning Always check to make sure that the number of formatters match the number of optional parameters passed. GCC
       will not issue a warning as it would for printf, because this is not part of the standard library.
-   @warning It is assumed that the code using this function is well behaved; in particular, it is assumed that `fmt` is
-      well formed, and that a `%` is always followed by an `s`, because only `%s` is supported.
+   @warning It is assumed that the code using this function is well behaved; in particular, it is assumed that `fmt` is well formed.
  */
 void yaircd_send(struct irc_client *client, const char *fmt, ...)
 {
-	const char *ptr;
-	char *str;
-	char buffer[MAX_MSG_SIZE + 1];
-	size_t bufp;
-	int len;
 	va_list args;
+	char buf[MAX_MSG_SIZE+1];
+	char *large_buf;
+	int size;
+	
 	va_start(args, fmt);
-
-	ptr = fmt;
-	bufp = 0;
-	while (*ptr != '\0') {
-		if (*ptr != '%') {
-			if (bufp == sizeof(buffer) - 1) {
-				write_to_noerr(client, buffer, bufp);
-				bufp = 0;
-			}
-			buffer[bufp++] = *ptr++;
-		}else {
-			ptr += 2;
-			str = va_arg(args, char *);
-			if (bufp == sizeof(buffer) - 1) {
-				write_to_noerr(client, buffer, sizeof(buffer) - 1);
-				bufp = 0;
-			}
-			while ((len =
-					snprintf(buffer + bufp, sizeof(buffer) - bufp, "%s",
-						 str)) >= sizeof(buffer) - bufp) {
-				/* assert: buffer[sizeof(buffer)-1] == '\0' */
-				str += sizeof(buffer) - bufp - 1;
-				write_to_noerr(client, buffer, sizeof(buffer) - 1);
-				bufp = 0;
-			}
-			bufp += len;
+	size = vsnprintf(buf, sizeof(buf), fmt, args);
+	va_end(args);
+	if (size >= sizeof(buf)) {
+		if ((large_buf = malloc((size_t) size+1)) == NULL) {
+			fprintf(stderr, "::msgio.c:yaircd_send(): Needed to allocate %d long buffer, but no memory is availabe.\nOriginal message: %s\n", size+1, fmt);
+			return;
 		}
+		va_start(args, fmt);
+		vsnprintf(large_buf, size+1, fmt, args);
+		va_end(args);
+		write_to_noerr(client, large_buf, (size_t) size);
+		free(large_buf);
+		return;
 	}
-	if (bufp > 0) {
-		write_to_noerr(client, buffer, bufp);
-	}
+	write_to_noerr(client, buf, size);
 }
 
 /** Works pretty much the same way as `sprintf()`, but it never returns a number greater than or equal to `size`. As a
