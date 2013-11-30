@@ -1,6 +1,6 @@
 #ifndef __YAIRCD_SERVINFO_GUARD__
 #define __YAIRCD_SERVINFO_GUARD__
-
+#include <stddef.h>
 /** @file
 	@brief Main server structures
 	

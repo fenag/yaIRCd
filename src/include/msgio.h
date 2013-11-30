@@ -1,3 +1,5 @@
+#ifndef __YAIRCD_MSGIO_GUARD__
+#define __YAIRCD_MSGIO_GUARD__
 #include "client.h"
 
 /** @file
@@ -35,21 +37,7 @@
 /* Functions documented in the source file */
 void yaircd_send(struct irc_client *client, const char *fmt, ...);
 int cmd_print_reply(char *buf, size_t size, const char *msg, ...);
-void send_err_notregistered(struct irc_client *client);
-void send_err_unknowncommand(struct irc_client *client, char *cmd);
-void send_err_nonicknamegiven(struct irc_client *client);
-void send_err_needmoreparams(struct irc_client *client, char *cmd);
-void send_err_erroneusnickname(struct irc_client *client, char *nick);
-void send_err_nicknameinuse(struct irc_client *client, char *nick);
-void send_err_alreadyregistred(struct irc_client *client);
-void send_motd(struct irc_client *client);
-void send_welcome(struct irc_client *client);
-void send_err_norecipient(struct irc_client *client, char *cmd);
-void send_err_notexttosend(struct irc_client *client);
-void send_err_nosuchnick(struct irc_client *client, char *nick);
-void send_err_nosuchchannel(struct irc_client *client, char *chan);
-void send_err_notonchannel(struct irc_client *client, char *chan);
-void notify_privmsg(struct irc_client *from, struct irc_client *to, char *dest, char *message);
 inline void write_to_noerr(struct irc_client *client, char *buf, size_t len);
 inline ssize_t read_from_noerr(struct irc_client *client, char *buf, size_t len);
 
+#endif /* __YAIRCD_MSGIO_GUARD__ */

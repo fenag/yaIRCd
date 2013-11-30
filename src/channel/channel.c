@@ -5,9 +5,10 @@
 #include "list.h"
 #include "client_list.h"
 #include "channel.h"
-#include "msgio.h"
+#include "send_rpl.h"
 #include "write_msgs_queue.h"
 #include "serverinfo.h"
+#include "msgio.h"
 
 /** @file
    @brief Channels management module

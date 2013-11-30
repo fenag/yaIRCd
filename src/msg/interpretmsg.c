@@ -4,7 +4,6 @@
 #include <stdarg.h>
 #include <ctype.h>
 #include "protocol.h"
-#include "msgio.h"
 #include "interpretmsg.h"
 #include "wrappers.h"
 #include "client_list.h"
@@ -12,6 +11,9 @@
 #include "channel.h"
 #include "serverinfo.h"
 #include "trie.h"
+#include "send_err.h"
+#include "send_rpl.h"
+#include "msgio.h"
 
 /** @file
    @brief Functions responsible for interpreting an IRC message.

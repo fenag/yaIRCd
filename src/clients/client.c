@@ -19,6 +19,7 @@
 #include "cloak.h"
 #include "serverinfo.h"
 #include "read_msgs.h"
+#include "send_err.h"
 
 /** @file
    @brief Implementation of functions that deal with irc clients
