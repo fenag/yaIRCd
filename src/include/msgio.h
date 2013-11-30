@@ -50,7 +50,6 @@ void send_err_nosuchnick(struct irc_client *client, char *nick);
 void send_err_nosuchchannel(struct irc_client *client, char *chan);
 void send_err_notonchannel(struct irc_client *client, char *chan);
 void notify_privmsg(struct irc_client *from, struct irc_client *to, char *dest, char *message);
-inline void msg_flush(char *message, void *arg);
 inline void write_to_noerr(struct irc_client *client, char *buf, size_t len);
 inline ssize_t read_from_noerr(struct irc_client *client, char *buf, size_t len);
 

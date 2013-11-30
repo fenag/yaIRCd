@@ -1,9 +1,11 @@
 #include <stdlib.h>
 #include <string.h>
-#include "client_queue.h"
+#include "client.h"
+#include "write_msgs_queue.h"
+#include "msgio.h"
 /** @file
-   @brief Client's messages queue management functions
-   This file provides a module that knows how to operate on a client's messages queue.
+   @brief Client's messages write queue management functions
+   This file provides a module that knows how to operate on a client's messages write queue.
    It is easy for a client's thread to wake up and read incoming data using an IO watcher. However, sporadically, we
       also need to wake up a client's thread to write to his socket.
    For example, if user A PRIVMSGs user B, user A's thread must be able to somehow inform user B thread that something
@@ -11,13 +13,13 @@
    To do so, we use an async watcher. An async watcher allows an arbitrary thread X to wake up another thread Y. Thread
       Y must be running an events loop and must have initialized and started an async watcher.
    An async watcher works pretty much the same way as an IO watcher, but libev's documentation explicitly states that
-      queueing is not supported. In other words, if more async messages arrive when we are processingan async callback,
-      these will be silently discarded. To avoid losing messages like this, we implement our own messages queueing
+      queueing is not supported. In other words, if more async messages arrive when we are processing an async callback,
+      these will be silently discarded. Or, if multiple async requests are issued by different threads, they may all
+	  be packed in a single callback. To avoid losing messages like this, we implement our own messages queueing
       system.
    Each client holds a queue of messages waiting to be written to his socket. These messages can originate from any
       thread.
    Every operation in a client's queue shall be invoked through the use of the functions declared in this file.
-   These functions are not thread-safe. It is assumed that they are called by a thread-safe module.
    @author Filipe Goncalves
    @date November 2013
  */
@@ -115,27 +117,26 @@ inline int client_is_queue_empty(struct msg_queue *queue)
 	return ret;
 }
 
-/** Atomically iterates destructively through a queue, calling the specified function for each element that is dequeued.
-   @param queue The queue to iterate.
-   @param f A pointer to a function that shall be called for each element dequeued. This function is passed a pointer to
-      the message dequeued as its first parameter, and is passed `args` as its second parameter.
-   @param args A generic pointer to an arbitrary argument that will be passed as the second parameter when `(f)()` is
-      called.
-   @warning This function dequeues every message. When this function returns, the queue will be empty.
-   @warning The function pointed to by `f` shall not invoke actions that can possibly result in `pthread_exit()` being
-      called. The function is invoked while a lock to the queue is on hold; calling `pthread_exit()` inside `f` will
-      cause undefined behavior.
-   @warning The function pointed to by `f` must free the message as long as it is not needed anymore. Memory leaks will
-      occur if it doesn't do so.
+/** Function used when a client wants to flush his messages write queue.
+	This will destructively iterate through a queue for a given client, writing every pending message
+	to this client's socket.
+	@param client Target client.
+	@param queue The queue to flush.
  */
-void client_queue_foreach(struct msg_queue *queue, void (*f)(char *, void *), void *args)
+void flush_queue(struct irc_client *client, struct msg_queue *queue)
 {
+	/* We ignore possible errors that may arise during a write. We use write_to(), not write_to_noerr(),
+	   because write_to_noerr() calls pthread_exit() if things go wrong, and we can't call pthread_exit() here,
+	   since we're holding a lock to a queue. Things would fall apart if we did so.
+	 */
 	int i;
 	int j;
 	pthread_mutex_lock(&queue->mutex);
 	for (i = queue->bottom, j = 0; j < queue->elements; j++, i = (i + 1) % WRITE_QUEUE_SIZE) {
-		(*f)(queue->messages[i], args);
+		(void)write_to(client, queue->messages[i], strlen(queue->messages[i]));
+		free(queue->messages[i]);
 	}
 	queue->bottom = queue->top = queue->elements = 0;
 	pthread_mutex_unlock(&queue->mutex);
 }
+

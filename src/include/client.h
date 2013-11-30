@@ -3,8 +3,8 @@
 #include <ev.h>
 #include <openssl/ssl.h>
 #include <netinet/in.h>
-#include "client_queue.h"
-#include "parsemsg.h"
+#include "write_msgs_queue.h"
+#include "read_msgs.h"
 
 /** @file
 	@brief Functions that deal with irc clients

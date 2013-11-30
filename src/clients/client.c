@@ -18,6 +18,7 @@
 #include "interpretmsg.h"
 #include "cloak.h"
 #include "serverinfo.h"
+#include "read_msgs.h"
 
 /** @file
    @brief Implementation of functions that deal with irc clients
@@ -251,7 +252,7 @@ static void queue_async_cb(EV_P_ ev_async *w, int revents)
 {
 	struct irc_client *client;
 	client = (struct irc_client*)((char*)w - offsetof(struct irc_client, async_watcher));
-	client_queue_foreach(&client->write_queue, msg_flush, (void*)client);
+	flush_queue(client, &client->write_queue);
 }
 
 /** This function is set by the thread init function (`new_client()`) as the cleanup handler for `pthread_exit()`, thus,

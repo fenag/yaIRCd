@@ -6,7 +6,7 @@
 #include "client_list.h"
 #include "channel.h"
 #include "msgio.h"
-#include "client_queue.h"
+#include "write_msgs_queue.h"
 #include "serverinfo.h"
 
 /** @file

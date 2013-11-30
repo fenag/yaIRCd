@@ -32,12 +32,13 @@ struct msg_queue {
 	pthread_mutex_t mutex; /**<a mutex to coordinate concurrent access to a queue. */
 };
 
-/* Documented in client_queue.c */
+struct irc_client;
+/* Documented in write_msgs_queue.c */
 int client_queue_init(struct msg_queue *queue);
 int client_queue_destroy(struct msg_queue *queue);
 int client_enqueue(struct msg_queue *queue, char *message);
 char *client_dequeue(struct msg_queue *queue);
 int client_is_queue_empty(struct msg_queue *queue);
-void client_queue_foreach(struct msg_queue *queue, void (*f)(char *, void *), void *args);
+void flush_queue(struct irc_client *client, struct msg_queue *queue);
 
 #endif /* __IRC_CLIENT_QUEUE_GUARD__ */

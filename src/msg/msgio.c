@@ -348,24 +348,3 @@ void notify_privmsg(struct irc_client *from, struct irc_client *to, char *dest, 
 	client_enqueue(&to->write_queue, message);
 	ev_async_send(to->ev_loop, &to->async_watcher);
 }
-
-/** Function used when a client wants to flush his messages write queue.
-   This is indirectly called by the queue library in `client_queue_foreach()` (see `queue_async_cb()`).
-   @param message The message dequeued in the current iteration.
-   @param arg A generic argument passed by the original function that called `client_queue_foreach()`.
-   @warning It is very important to remember that this function will be executed in an atomic block, holding a lock to a
-      client's queue.
-   Thus, it is imperative that this function does not call `pthread_exit()`.
- */
-inline void msg_flush(char *message, void *arg)
-{
-	/* We ignore possible errors that may arise during a write. We use write_to(), not write_to_noerr(),
-	   because write_to_noerr() calls pthread_exit() if things go wrong, and we can't call pthread_exit() here,
-	   since we're holding a lock to a queue. Things would fall apart if we did so.
-	   The thread will eventually be notified that the connection was broken. In the meantime, we just keep writing
-	      as if
-	   nothing happened.
-	 */
-	(void)write_to((struct irc_client*)arg, message, strlen(message));
-	free(message);
-}
