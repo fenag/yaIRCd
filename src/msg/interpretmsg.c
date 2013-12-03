@@ -227,6 +227,7 @@ void cmd_user_registered(struct irc_client *client, char *prefix, char *cmd, cha
 void cmd_quit(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size)
 {
 	/* TODO implement QUIT command */
+	
 }
 
 /** Callback function used by `cmd_privmsg()` when a PRIVMSG command is issued on a one-to-one private conversation. The

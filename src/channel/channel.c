@@ -52,8 +52,8 @@ struct irc_channel {
 struct irc_channel_wrapper {
 	struct irc_client *client; /**<Original client where the request came from */
 	char *channel; /**<Channel name */
-	char *partmsg; /**<Part message, if it was a part command */
 	char *msg; /**<Message to send to the channel users, if it was a PRIVMSG command */
+	char irc_reply[MAX_MSG_SIZE+1]; /**<IRC Message to send to other channel users */
 };
 
 /**Global channels list for the whole network */
@@ -126,31 +126,6 @@ static void notify_join(struct irc_client *to_notify, struct irc_client *user_jo
 			      user_joined->username,
 			      user_joined->public_host,
 			      chan);
-	client_enqueue(&to_notify->write_queue, message);
-	ev_async_send(to_notify->ev_loop, &to_notify->async_watcher);
-}
-
-/** Notifies a user in a channel that another user parted. To do so, it enqueues a new IRC message into `to_notify`'s
-   messages queue and sends a libev async signal to his thread.
-   This function is used by `notify_user_part()` and called for every client inside a channel (except the leaving
-      client).
-   @param to_notify A pointer to a client structure denoting the client to notify. This client is inside the channel.
-   @param user_parted A pointer to a client structure holding the user that has just parted.
-   @param chan The channel name.
-   @param part_msg The part message. If no part message is supplied by the user, the calling function shall pass a
-      pointer to the user's nickname, as written in the RFC.
- */
-static void notify_part(struct irc_client *to_notify, struct irc_client *user_parted, char *chan, char *part_msg)
-{
-	char message[MAX_MSG_SIZE + 1];
-	(void)cmd_print_reply(message,
-			      sizeof(message),
-			      ":%s!%s@%s PART %s :%s\r\n",
-			      user_parted->nick,
-			      user_parted->username,
-			      user_parted->public_host,
-			      chan,
-			      part_msg);
 	client_enqueue(&to_notify->write_queue, message);
 	ev_async_send(to_notify->ev_loop, &to_notify->async_watcher);
 }
@@ -381,26 +356,14 @@ static void destroy_channel(irc_channel_ptr chan)
 	free(chan);
 }
 
-/** Callback function used in a `trie_for_each()` call issued by `part_channel()` to notify other channel users that
-   someone is leaving the channel.
-   @param to_notify A pointer to the `struct chan_user` for the user that shall be notified in the current iteration.
-      This parameter is always casted to `struct chan_user `.
-   @param args A `struct irc_channel_wrapper ` containing the client that issued the PART command, the channel affected,
-      and the part message.
- */
-static void notify_user_part(void *to_notify, void *args)
-{
-	struct irc_channel_wrapper *info = (struct irc_channel_wrapper*)args;
-	notify_part(((struct chan_user*)to_notify)->user, info->client, info->channel, info->partmsg);
+static void notify_leave_channel(void *to_notify_generic, void *args) {
+	struct irc_client *to_notify = ((struct chan_user *) to_notify_generic)->user;
+	struct irc_channel_wrapper *info = (struct irc_channel_wrapper *) args;
+	client_enqueue(&to_notify->write_queue, info->irc_reply);
+	ev_async_send(to_notify->ev_loop, &to_notify->async_watcher);
 }
 
-/** Callback function used in a `list_find_and_execute_globalock()` call issued by `do_part()`. It deletes a client from
-   a channel's user list, and notifies every other user.
-   If the channel becomes empty, it is eliminated.
-   @param channel An `irc_channel_ptr` holding the affected channel's information.
-   @param args A `struct irc_channel_wrapper ` holding the client who wants to leave.
- */
-static void *part_channel(void *channel, void *args)
+static void *leave_channel(void *channel, void *args)
 {
 	irc_channel_ptr chan;
 	struct irc_channel_wrapper *info;
@@ -412,12 +375,26 @@ static void *part_channel(void *channel, void *args)
 		return NULL;
 	}
 	free(user);
-	trie_for_each(((irc_channel_ptr)channel)->users, notify_user_part, args);
+	trie_for_each(((irc_channel_ptr)channel)->users, notify_leave_channel, args);
 	if (--chan->users_count == 0) {
 		/* Channel empty, clear up */
 		destroy_channel(chan);
 	}
 	return args;
+}
+
+void do_quit(struct irc_client *client, char *channel, char *quit_msg) {
+	struct irc_channel_wrapper args;
+	int result;
+	int i;
+	args.client = client;
+	args.channel = channel;
+	cmd_print_reply(args.irc_reply, sizeof(args.irc_reply), ":%s!%s@%s QUIT :%s\r\n", client->nick, client->username, client->public_host, quit_msg);
+	(void) list_find_and_execute_globalock(channels, channel, leave_channel, NULL, (void*)&args, NULL, &result);
+	for (i = 0; i < get_chanlimit(); i++) {
+		free(client->channels[i]);
+	}
+	client->channels_count = 0;
 }
 
 /** This is the function invoked by the rest of the code to deal with PART messages.
@@ -442,8 +419,10 @@ int do_part(struct irc_client *client, char *channel, char *part_msg)
 	void *ret;
 	args.client = client;
 	args.channel = channel;
-	args.partmsg = part_msg;
-	ret = list_find_and_execute_globalock(channels, channel, part_channel, NULL, (void*)&args, NULL, &result);
+	
+	cmd_print_reply(args.irc_reply, sizeof(args.irc_reply), ":%s!%s@%s PART %s :%s\r\n", client->nick, client->username, client->public_host, channel, part_msg);
+	
+	ret = list_find_and_execute_globalock(channels, channel, leave_channel, NULL, (void*)&args, NULL, &result);
 	if (result != 0 && ret == NULL) {
 		/* Attempted to part a channel he's not part of */
 		return CHAN_NOT_ON_CHANNEL;
