@@ -9,6 +9,7 @@
 #include "write_msgs_queue.h"
 #include "serverinfo.h"
 #include "msgio.h"
+#include "wrappers.h"
 
 /** @file
    @brief Channels management module
@@ -316,7 +317,12 @@ static void *join_existingchan(void *channel, void *args)
    On success, acknowledges the join request and notifies every other client in the channel about the new comer.
    @param client Pointer to the client who issued the JOIN command.
    @param channel Pointer to a null terminated characters sequence holding the channel name in the JOIN command.
-   @return `0` on success; `CHAN_NO_MEM` if the request could not be fulfilled due to lack of memory resources.
+   @return 
+	<ul>
+		<li>`0` on success</li>
+		<li>`CHAN_NO_MEM` if the request could not be fulfilled due to lack of memory resources</li>
+		<li>`CHAN_LIMIT_EXCEEDED` if the client cannot join channels due to the maximum channel limit imposed in yaircd.conf</li>
+	</ul>
  */
 int do_join(struct irc_client *client, char *channel)
 {
@@ -324,7 +330,12 @@ int do_join(struct irc_client *client, char *channel)
 	struct irc_channel_wrapper args;
 	void *ret;
 	int result;
-
+	int i;
+	/* We don't need a mutex in client->channels_count, since only the client's thread will be accessing this field */
+	if (client->channels_count == get_chanlimit()) {
+		return CHAN_LIMIT_EXCEEDED;
+	}
+	
 	args.client = client;
 	args.channel = channel;
 	ret = list_find_and_execute_globalock(channels,
@@ -336,6 +347,23 @@ int do_join(struct irc_client *client, char *channel)
 					      &result);
 	if (ret == NULL) {
 		return CHAN_NO_MEM;
+	}
+	else {
+		/* assert: client->channels_count < get_chanlimit() => exists i in [0, ..., get_chanlimit()-1] s.t. client->channels[i] == NULL */
+		for (i = 0; client->channels[i] != NULL; i++)
+			; /* Intentionally left blank */
+		/* assert: client->channels[i] == NULL */
+		if ((client->channels[i] = strdup(channel)) == NULL) {
+			do_part(client, channel, client->nick);
+			return CHAN_NO_MEM;
+		}
+		client->channels_count++;
+	}
+	printf("%s is now on channels:\n", client->nick);
+	for (i = 0; i < client->channels_count; i++) {
+		if (client->channels[i]) {
+			printf("\t%s\n", client->channels[i]);
+		}
 	}
 	return 0;
 }
@@ -408,6 +436,7 @@ static void *part_channel(void *channel, void *args)
 int do_part(struct irc_client *client, char *channel, char *part_msg)
 {
 	/* TODO - Check if channel name is valid */
+	int i;
 	struct irc_channel_wrapper args;
 	int result;
 	void *ret;
@@ -418,6 +447,23 @@ int do_part(struct irc_client *client, char *channel, char *part_msg)
 	if (result != 0 && ret == NULL) {
 		/* Attempted to part a channel he's not part of */
 		return CHAN_NOT_ON_CHANNEL;
+	}
+	else {
+		for (i = 0; 
+			 i < get_chanlimit() && (client->channels[i] == NULL ? 1 : strcasecmp(client->channels[i], !=, channel));
+			 i++)
+			; /* Intentionally left blank */
+		/* assert: i >= get_chanlimit() || strcasecmp(client->channels[i], ==, channel) */
+		if (i >= get_chanlimit()) {
+			/* This should never happen if we got past the test result != 0 && ret == NULL */
+			fprintf(stderr, "::channel.c:do_part(): User successfully parted from channel, but there's no such entry in client->channels\n");
+			return 0; /* Do we really want to return 0? Well, the part was successfull... */
+		}
+		else {
+			free(client->channels[i]);
+			client->channels[i] = NULL;
+			client->channels_count--;
+		}
 	}
 	return 0;
 }

@@ -483,6 +483,9 @@ void cmd_join(struct irc_client *client, char *prefix, char *cmd, char *params[]
 			stderr,
 			"::interpretmsg.c:interpret_msg(): No memory to allocate new channel, ignoring request.\n");
 		break;
+	case CHAN_LIMIT_EXCEEDED:
+		send_err_toomanychannels(client, params[0]);
+		break;
 	}
 }
 

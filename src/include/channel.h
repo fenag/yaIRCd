@@ -24,6 +24,9 @@
 /** Used to report when someone attempts to perform an action in a channel that does not exist */
 #define CHAN_NO_SUCH_CHANNEL 4
 
+/** Used to report when a client attempts to join a channel, but he has hit the maximum number of channels allowed */
+#define CHAN_LIMIT_EXCEEDED 5
+
 /** Opaque type for a channelused by the rest of the code */
 typedef struct irc_channel *irc_channel_ptr;
 
