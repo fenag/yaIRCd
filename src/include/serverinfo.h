@@ -31,4 +31,5 @@ const char *get_priv_key_path(void);
 const char *get_cloak_net_prefix(void);
 const char *get_cloak_key(int i);
 size_t get_cloak_key_length(int i);
+int get_chanlimit(void);
 #endif /* __YAIRCD_SERVINFO_GUARD__ */

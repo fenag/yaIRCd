@@ -51,6 +51,7 @@ struct server_info {
 	const char *net_name; /**<Network name */
 	int socket_max_hangup_clients; /**<Max. hangup clients allowed to be on hold while the parent thread dispatches
 	                                  a new thread to deal with a freshly arrived connection */
+	int chanlimit; /**<How many channels a client is allowed to sit in simultaneously */
 	struct admin_info admin; /**<Server administrator info. See the documentation for `struct admin_info`. */
 	struct socket_info socket_standard; /**<Information about the standard (plaintext) socket. See the documentation
 	                                       for `struct socket_info`. */
@@ -121,10 +122,9 @@ int loadServerInfo(void)
 	info->cloaking.keys_length[0] = strlen(info->cloaking.keys[0]);
 	info->cloaking.keys_length[1] = strlen(info->cloaking.keys[1]);
 	info->cloaking.keys_length[2] = strlen(info->cloaking.keys[2]);
-
+	
 	/* Standard socket info */
 	setting = config_lookup(&cfg, "listen.sockets.standard");
-
 	config_setting_lookup_int(setting, "port", &(info->socket_standard.port));
 	config_setting_lookup_int(setting, "max_hangup_clients", &(info->socket_standard.max_hangup_clients));
 	config_setting_lookup_string(setting, "ip", &(info->socket_standard.ip));
@@ -136,10 +136,14 @@ int loadServerInfo(void)
 	config_setting_lookup_int(setting, "max_hangup_clients", &(info->socket_secure.max_hangup_clients));
 	config_setting_lookup_string(setting, "ip", &(info->socket_secure.ip));
 	info->socket_secure.ssl = 1;
-
+	
 	/* Files */
 	setting = config_lookup(&cfg, "files");
 	config_setting_lookup_string(setting, "motd", &(info->motd_file_path));
+	
+	/* Channel block */
+	setting = config_lookup(&cfg, "channels");
+	config_setting_lookup_int(setting, "chanlimit", &(info->chanlimit));
 	return 0;
 }
 
@@ -261,4 +265,10 @@ size_t get_cloak_key_length(int i)
 	return info->cloaking.keys_length[i - 1];
 }
 
+/** Reads the chanlimit setting. A client cannot be in more than `chanlimit` channels simultaneously.
+	@return How many channels, at most, a client can sit in
+*/
+int get_chanlimit(void) {
+	return info->chanlimit;
+}
 

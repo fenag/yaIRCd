@@ -178,6 +178,12 @@ static struct irc_client *create_client(struct irc_client_args_wrapper *args)
 		free_thread_arguments(args);
 		return NULL;
 	}
+	if ((new_client->channels = calloc((size_t) get_chanlimit(), sizeof(*new_client->channels))) == NULL) {
+		client_queue_destroy(&new_client->write_queue);
+		ev_loop_destroy(new_client->ev_loop);
+		free(new_client);
+		free_thread_arguments(args);
+	}
 	new_client->socket_fd = args->socket;
 	new_client->server = NULL; /* local client */
 	new_client->is_registered = 0;
@@ -188,6 +194,7 @@ static struct irc_client *create_client(struct irc_client_args_wrapper *args)
 	new_client->username = NULL;
 	new_client->hostname = NULL;
 	new_client->public_host = NULL;
+	new_client->channels_count = 0;
 	initialize_irc_message(&new_client->last_msg);
 
 	yaircd_send(new_client, ":%s NOTICE AUTH :*** Looking up your hostname...\r\n", get_server_name());
