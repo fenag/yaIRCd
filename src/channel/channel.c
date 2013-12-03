@@ -383,16 +383,17 @@ static void *leave_channel(void *channel, void *args)
 	return args;
 }
 
-void do_quit(struct irc_client *client, char *channel, char *quit_msg) {
+void do_quit(struct irc_client *client, char *quit_msg) {
 	struct irc_channel_wrapper args;
 	int result;
 	int i;
 	args.client = client;
-	args.channel = channel;
 	cmd_print_reply(args.irc_reply, sizeof(args.irc_reply), ":%s!%s@%s QUIT :%s\r\n", client->nick, client->username, client->public_host, quit_msg);
-	(void) list_find_and_execute_globalock(channels, channel, leave_channel, NULL, (void*)&args, NULL, &result);
 	for (i = 0; i < get_chanlimit(); i++) {
-		free(client->channels[i]);
+		if (client->channels[i] != NULL) {
+			(void) list_find_and_execute_globalock(channels, client->channels[i], leave_channel, NULL, (void*)&args, NULL, &result);
+			free(client->channels[i]);
+		}
 	}
 	client->channels_count = 0;
 }

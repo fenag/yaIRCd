@@ -20,6 +20,7 @@
 #include "serverinfo.h"
 #include "read_msgs.h"
 #include "send_err.h"
+#include "channel.h"
 
 /** @file
    @brief Implementation of functions that deal with irc clients
@@ -300,6 +301,7 @@ static void queue_async_cb(EV_P_ ev_async *w, int revents)
  */
 void destroy_client(void *arg)
 {
+	char *quit_msg = DEFAULT_QUIT_MSG;
 	struct irc_client *client = (struct irc_client*)arg;
 	/* First, we HAVE to delete this client from the clients list, no matter what.
 	   Why? Because if we delete him, we know for sure that no other thread will be able to reach him and
@@ -312,7 +314,7 @@ void destroy_client(void *arg)
 	if (client->is_registered) {
 		client_list_delete(client);
 	}
-	/* TODO Notify other clients on the same channel that this client is leaving */
+	do_quit(client, quit_msg);
 	free_client(client);
 }
 
@@ -334,6 +336,7 @@ static void free_client(struct irc_client *client)
 	free(client->username);
 	free(client->server);
 	free(client->public_host);
+	free(client->channels);
 	if (client_queue_destroy(&client->write_queue) == -1) {
 		fprintf(stderr, "Warning: client_queue_destroy() reported an error - THIS SHOULD NEVER HAPPEN!\n");
 	}

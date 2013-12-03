@@ -24,7 +24,8 @@
    @author Filipe Goncalves
    @date November 2013
    @see parsemsg.c
-   @todo Commands are now recognized by serial comparison. Discuss if a trie approach is benefitial.
+   @todo Implement channel listing in WHOIS command
+   @todo Allow different quit messages (quit message is currently hardcoded)
  */
 
 /** A macro to count the number of elements in an array. Remember that arrays decay into pointers in an expression; as a
@@ -226,8 +227,17 @@ void cmd_user_registered(struct irc_client *client, char *prefix, char *cmd, cha
 
 void cmd_quit(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size)
 {
-	/* TODO implement QUIT command */
-	
+	char err_msg[MAX_MSG_SIZE+1];
+	int size;
+	/* The server acknowledges a voluntary QUIT by sending an ERROR message to the client. */
+	size = cmd_print_reply(err_msg, sizeof(err_msg), "ERROR :Closing Link: %s[%s] (%s)\r\n",
+				client->nick, client->hostname, DEFAULT_QUIT_MSG);
+	(void) write_to(client, err_msg, size);
+	/* We call pthread_exit() here, which will call destroy_client(), since we pushed it to the thread's cleanup handler
+	   in the beginning with pthread_cleanup_push().
+	   destroy_client() will call do_quit() to notify other clients about this client's death.
+	 */
+	pthread_exit(NULL);
 }
 
 /** Callback function used by `cmd_privmsg()` when a PRIVMSG command is issued on a one-to-one private conversation. The

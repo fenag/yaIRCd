@@ -401,10 +401,9 @@
 #define RPL_ADMINEMAIL "259"
 /* End command responses */
 
-/* Quit messages */
-/** Quit message for when a client exits voluntarily with a QUIT command, but no reason is given, or
-	the connection was closed without a QUIT command
- */
-#define QUIT_NO_REASON "Client exited."
+/* Misc */
+/** Default quit message */
+#define DEFAULT_QUIT_MSG "Client exited"
+/* End misc */
 
 #endif /* __PROTOCOL_SPECS_GUARD__ */
