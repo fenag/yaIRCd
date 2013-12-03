@@ -53,7 +53,9 @@ struct irc_channel_wrapper {
 	struct irc_client *client; /**<Original client where the request came from */
 	char *channel; /**<Channel name */
 	char *msg; /**<Message to send to the channel users, if it was a PRIVMSG command */
-	char irc_reply[MAX_MSG_SIZE+1]; /**<IRC Message to send to other channel users */
+	char irc_reply[MAX_MSG_SIZE+1]; /**<Complete IRC Message to send to other channel users. This is used because we only need to print the message
+										once into the buffer, and then echo it to every other channel user. Thus, this can be a join message, part, quit,
+										privmsg, etc. This buffer must be null terminated. */
 };
 
 /**Global channels list for the whole network */
@@ -344,7 +346,7 @@ int do_join(struct irc_client *client, char *channel)
 }
 
 /** Destroys a channel when it no longer holds any client, freeing every allocated resources. This is called by
-   `part_channel()` when the last client leaves the channel.
+   `leave_channel()` when the last client leaves the channel.
    @param chan An `irc_channel_ptr` holding the channel to destroy.
  */
 static void destroy_channel(irc_channel_ptr chan)
@@ -383,6 +385,20 @@ static void *leave_channel(void *channel, void *args)
 	return args;
 }
 
+/** This is the function invoked by the rest of the code to deal with QUIT messages.
+   It indirectly invokes `leave_channel()` using `list_find_and_execute_globalock()`.
+   The following actions are performed for each channel in the user's channels list:
+	<ul>
+		<li>The user is deleted from the channel's user list</li>
+		<li>Other channel users are notified about this</li>
+		<li>If the channel becomes empty, it is deleted</li>
+		<li>Finally, the channel name is removed from this user's channels list</li>
+	</ul>
+   @param client The client where the QUIT request came from.
+   @param channel Channel name.
+   @param quit_msg Quit message. The code using this function should always provide a quit message.
+   This must be a valid null terminated characters sequence.
+ */
 void do_quit(struct irc_client *client, char *quit_msg) {
 	struct irc_channel_wrapper args;
 	int result;
@@ -399,10 +415,10 @@ void do_quit(struct irc_client *client, char *quit_msg) {
 }
 
 /** This is the function invoked by the rest of the code to deal with PART messages.
-   It indirectly invokes `part_channel()` using `list_find_and_execute_globalock()`. Note that `part_channel()` is only
+   It indirectly invokes `leave_channel()` using `list_find_and_execute_globalock()`. Note that `leave_channel()` is only
       called if the channel really exists.
-   When the channel exists, the user is deleted from the channel's user list, other channel users are notified about
-      this, and finally, if the channel becomes empty, it is deleted.
+   When the channel exists, the user is deleted from the channel's user list, the channel name is removed from this user's channels list,
+   other channel users are notified about this, and finally, if the channel becomes empty, it is deleted.
    @param client The client where the PART request came from.
    @param channel Channel name.
    @param part_msg Part message. The code using this function should always provide a part message. If the client didn't

@@ -30,8 +30,9 @@
 
 /** A macro to count the number of elements in an array. Remember that arrays decay into pointers in an expression; as a
    consequence, when passed to other functions, arrays are seen as pointers and this macro will wrongly expand to
-   `sizeof(&a[0])/sizeof(a[0])`, i.e., `sizeof(a)` will be interpreted as the size of an element of type `(typeof(a[0])
- *)` */
+   `sizeof(&a[0])/sizeof(a[0])`, i.e., `sizeof(a)` will be interpreted as the size of an element of type 
+   `(typeof(a[0]) *)` 
+*/
 #define array_count(a) (sizeof(a) / sizeof(*a))
 
 /** A trie used to store function pointers to process every commands issued by registered connections */
