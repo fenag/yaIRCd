@@ -111,6 +111,13 @@ void chan_destroy(void)
 	destroy_word_list(channels, LIST_NO_FREE_NODE_DATA);
 }
 
+static void notify_channel_user(void *to_notify_generic, void *args) {
+	struct irc_client *to_notify = ((struct chan_user *) to_notify_generic)->user;
+	struct irc_channel_wrapper *info = (struct irc_channel_wrapper *) args;
+	client_enqueue(&to_notify->write_queue, info->irc_reply);
+	ev_async_send(to_notify->ev_loop, &to_notify->async_watcher);
+}
+
 /** Notifies a user in a channel that another user joined. To do so, it enqueues a new IRC message into `to_notify`'s
    messages queue and sends a libev async signal to his thread.
    This function is used by `join_ack_aux()` and called for every client inside a channel (except the new client).
@@ -118,19 +125,6 @@ void chan_destroy(void)
    @param user_joined A pointer to a client structure holding the user that has just joined.
    @param chan The channel name.
  */
-static void notify_join(struct irc_client *to_notify, struct irc_client *user_joined, char *chan)
-{
-	char message[MAX_MSG_SIZE + 1];
-	(void)cmd_print_reply(message,
-			      sizeof(message),
-			      ":%s!%s@%s JOIN %s\r\n",
-			      user_joined->nick,
-			      user_joined->username,
-			      user_joined->public_host,
-			      chan);
-	client_enqueue(&to_notify->write_queue, message);
-	ev_async_send(to_notify->ev_loop, &to_notify->async_watcher);
-}
 
 /** Auxiliary function indirectly used by `join_ack()` that is called for every user inside a channel after a new user
    joins and is added to the channel's userlist.
@@ -159,7 +153,7 @@ static void join_ack_aux(void *chanuser, void *args)
 			       chanusr->user->public_host);
 	(void)write_to(info->client, msg, size);
 	if (chanusr->user != info->client) {
-		notify_join(chanusr->user, info->client, info->channel);
+		notify_channel_user(chanusr, args);
 	}
 }
 
@@ -194,6 +188,7 @@ static void join_ack(struct irc_client *client, irc_channel_ptr chan)
 
 	args.client = client;
 	args.channel = chan->name;
+	cmd_print_reply(args.irc_reply, sizeof(args.irc_reply), ":%s!%s@%s JOIN %s\r\n", client->nick, client->username, client->public_host, chan->name);
 	trie_for_each(chan->users, join_ack_aux, (void*)&args);
 	size = cmd_print_reply(msg, sizeof(msg),
 			       ":%s " RPL_ENDOFNAMES " %s %s :End of NAMES list\r\n",
@@ -336,12 +331,6 @@ int do_join(struct irc_client *client, char *channel)
 		}
 		client->channels_count++;
 	}
-	printf("%s is now on channels:\n", client->nick);
-	for (i = 0; i < client->channels_count; i++) {
-		if (client->channels[i]) {
-			printf("\t%s\n", client->channels[i]);
-		}
-	}
 	return 0;
 }
 
@@ -358,13 +347,6 @@ static void destroy_channel(irc_channel_ptr chan)
 	free(chan);
 }
 
-static void notify_leave_channel(void *to_notify_generic, void *args) {
-	struct irc_client *to_notify = ((struct chan_user *) to_notify_generic)->user;
-	struct irc_channel_wrapper *info = (struct irc_channel_wrapper *) args;
-	client_enqueue(&to_notify->write_queue, info->irc_reply);
-	ev_async_send(to_notify->ev_loop, &to_notify->async_watcher);
-}
-
 static void *leave_channel(void *channel, void *args)
 {
 	irc_channel_ptr chan;
@@ -377,7 +359,7 @@ static void *leave_channel(void *channel, void *args)
 		return NULL;
 	}
 	free(user);
-	trie_for_each(((irc_channel_ptr)channel)->users, notify_leave_channel, args);
+	trie_for_each(((irc_channel_ptr)channel)->users, notify_channel_user, args);
 	if (--chan->users_count == 0) {
 		/* Channel empty, clear up */
 		destroy_channel(chan);
