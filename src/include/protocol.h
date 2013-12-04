@@ -29,6 +29,10 @@
 
 /** Max. chan name length */
 #define MAX_CHANNAME_LENGTH 32
+
+/** Max. quit message length. Must be greater than `QUIT_MSG_PREFIX` */
+#define MAX_QUITMSG_LENGTH 64
+
 /* End protocol limits */
 
 /* Error replies */
@@ -401,10 +405,33 @@
 #define RPL_ADMINEMAIL "259"
 /* End command responses */
 
-/* Quit messages */
-/** Quit message for when a client exits voluntarily with a QUIT command, but no reason is given, or
-	the connection was closed without a QUIT command
- */
-#define QUIT_NO_REASON "Client exited."
+/* Misc */
+/** Quit message prefix. This is prefixed to every custom, user-provided quit message.
+	This is a workaround to avoid clever users from using reserved quit messages (like NO_MEM_QUIT_MSG),
+	allowing the server administrator to really identify the real fatal error cases.
+	For example, if a user issues /quit Fatal: Resource allocation error, his quit message will be
+	PREFIX: Fatal: Resource allocation error, and the server administrator can understand that it was just
+	a prank :)
+*/
+#define QUIT_MSG_PREFIX "Quit: "
+
+/** Default quit message */
+#define DEFAULT_QUIT_MSG "Client exited"
+
+/** Quit message for ping timeout */
+#define TIMEOUT_QUIT_MSG "Ping timeout"
+
+/** Quit message for resource allocation errors
+	(e.g. no memory to store client's nick or user)
+*/
+#define NO_MEM_QUIT_MSG "Fatal: Resource allocation error"
+
+/** Quit message for when `read_from()` is not successfull, meaning the pipe was broken */
+#define BAD_READ_QUIT_MSG "Broken pipe"
+
+/** Quit message for when `write_to()` is not successfull */
+#define BAD_WRITE_QUIT_MSG "Write error on client's socket"
+
+/* End misc */
 
 #endif /* __PROTOCOL_SPECS_GUARD__ */

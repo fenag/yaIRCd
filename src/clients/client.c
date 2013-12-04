@@ -20,6 +20,7 @@
 #include "serverinfo.h"
 #include "read_msgs.h"
 #include "send_err.h"
+#include "channel.h"
 
 /** @file
    @brief Implementation of functions that deal with irc clients
@@ -38,6 +39,7 @@ static void free_client(struct irc_client *client);
 static struct irc_client *create_client(struct irc_client_args_wrapper *args);
 void free_thread_arguments(struct irc_client_args_wrapper *);
 static void queue_async_cb(EV_P_ ev_async *w, int revents);
+static void ping_timer_cb(EV_P_ ev_timer *w, int revents);
 
 /** Accepts a new client's connection. This function is indirectly called by the threads scheduler. When a new client
    pops in, the main process allocates a new thread whose init function is this one.
@@ -63,7 +65,7 @@ void *new_client(void *args)
 	pthread_cleanup_push(destroy_client, (void*)client);
 	/* At this point, we have:
 	        - A client structure successfully allocated
-	        - An events loop and 2 watchers - IO watcher and async watcher
+	        - An events loop and 4 watchers - IO watcher, async watcher, and timers for PING
 	        - A thread's cleanup handler to exit gracefully
 	   Let the party begin!
 	 */
@@ -71,6 +73,9 @@ void *new_client(void *args)
 	ev_io_start(client->ev_loop, &client->io_watcher);
 	ev_async_init(&client->async_watcher, queue_async_cb);
 	ev_async_start(client->ev_loop, &client->async_watcher);
+	client->last_activity = ev_now(client->ev_loop);
+	ev_init(&client->time_watcher, ping_timer_cb);
+	ping_timer_cb(client->ev_loop, &client->time_watcher, 0);
 	ev_run(client->ev_loop, 0); /* Go */
 
 	/* This is never reached, but we need to pair up push() and pop() calls */
@@ -123,7 +128,7 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents)
 			"::client.c:manage_client_messages(): EV_READ not present, but there was no EV_ERROR, ignoring message\n");
 		return;
 	}
-	client = (struct irc_client*)watcher;
+	client = (struct irc_client*)((char*)watcher - offsetof(struct irc_client, io_watcher));
 
 	read_data(client);
 
@@ -178,6 +183,12 @@ static struct irc_client *create_client(struct irc_client_args_wrapper *args)
 		free_thread_arguments(args);
 		return NULL;
 	}
+	if ((new_client->channels = calloc((size_t) get_chanlimit(), sizeof(*new_client->channels))) == NULL) {
+		client_queue_destroy(&new_client->write_queue);
+		ev_loop_destroy(new_client->ev_loop);
+		free(new_client);
+		free_thread_arguments(args);
+	}
 	new_client->socket_fd = args->socket;
 	new_client->server = NULL; /* local client */
 	new_client->is_registered = 0;
@@ -188,6 +199,8 @@ static struct irc_client *create_client(struct irc_client_args_wrapper *args)
 	new_client->username = NULL;
 	new_client->hostname = NULL;
 	new_client->public_host = NULL;
+	new_client->channels_count = 0;
+	new_client->connection_status = STATUS_OK;
 	initialize_irc_message(&new_client->last_msg);
 
 	yaircd_send(new_client, ":%s NOTICE AUTH :*** Looking up your hostname...\r\n", get_server_name());
@@ -244,9 +257,8 @@ static struct irc_client *create_client(struct irc_client_args_wrapper *args)
       willqueue the message into B's queue, and call `async_send()` on B's async watcher, to wake B up. When B wakes up,
       this function is called.
    Therefore, the main purpose of this function is to flush a client's queue.
-   @param w Pointer to this client's async watcher. A pointer to the client is obtained with `(struct irc_client )
-      ((char )w - offsetof(struct irc_client, async_watcher))`. This pointer manipulation is necessary to extract the
-      client's structure where `w` is embedded. In doubt, read about `offsetof()` macro in `stddef.h`'s manpage.
+   @param w Pointer to this client's async watcher. A pointer to the client is obtained with `(struct irc_client *) ((char *)w - offsetof(struct irc_client, async_watcher))`. 
+			This pointer manipulation is necessary to extract the client's structure where `w` is embedded. In doubt, read about `offsetof()` macro in `stddef.h`'s manpage.
    @param revents libev's flags. Not used for async callbacks.
  */
 static void queue_async_cb(EV_P_ ev_async *w, int revents)
@@ -254,6 +266,83 @@ static void queue_async_cb(EV_P_ ev_async *w, int revents)
 	struct irc_client *client;
 	client = (struct irc_client*)((char*)w - offsetof(struct irc_client, async_watcher));
 	flush_queue(client, &client->write_queue);
+}
+
+/** Called by the rest of the code everytime a client's session must be terminated. The reason for terminating a
+	client's session can be a voluntary QUIT, broken pipe, socket read or write error, connection lost, ping
+	timeout; in other words, any condition that makes it impossible to communicate to this client.
+	The code calling this function shall provide a proper quit message, depending on where the situation arised.
+	See `protocol.h` to learn some possible, built-in quit messages.
+	Either way, this function starts by trying to notify the client about this action, using the `ERROR` command,
+	as described in the protocol. The exact syntax of the message sent to the client follows this form:
+	`ERROR :Closing Link: &lt;nick&gt;[&lt;hostname&gt;] (&lt;quit message&gt;)`.
+	Whether the write is successfull or not is irrelevant, after attempting to notify the client about this,
+	the function calls `do_quit()`, to let every other client sharing a channel with this one that he's leaving,
+	and finally, `pthread_exit()` is called to free every resource allocated to this client and kill the thread.
+	@param client The client to disconnect.
+	@param quit_msg The quit message. This must be a valid pointer to a null-terminated characters sequence with
+	the quit message. Since no `free()`'s are performed on this parameter, it must NOT be a dynamically allocated pointer.
+	Typically, this will be a pointer to a string constant defined in `protocol.h` if the event triggering the QUIT
+	was an error on the server side. Otherwise, it is ok for this parameter to be a pointer to a local variable
+	stored in the stack of the calling function, as is the case with `cmd_quit()` in `interpretmsg.c`.
+	@note No other place in the code should call `pthread_exit()`. Always use this function to terminate a client's
+	session.
+*/
+void terminate_session(struct irc_client *client, char *quit_msg) {
+	int size;
+	char err_msg[MAX_MSG_SIZE+1];
+	size = cmd_print_reply(err_msg, sizeof(err_msg), "ERROR :Closing Link: %s[%s] (%s)\r\n",
+				(client->is_registered ? client->nick : "*"), client->hostname, quit_msg);
+	(void) write_to(client, err_msg, size);
+	do_quit(client, quit_msg);
+	pthread_exit(NULL); /* Calls destroy_client() */
+}
+
+/** Callback function used by the time watcher for each client.
+	Alright now, listen up, this is important. We have carefully followed libev's documentation suggestions, and implemented
+	the 3rd method described in this section: http://pod.tst.eu/http://cvs.schmorp.de/libev/ev.pod#code_ev_timer_code_relative_and_opti
+	We use a timer for each client, stored in the client's structure, and also a connection_status bit-field. See the definition for the client's
+	structure in `client.h` for further information.
+	The basic layout goes like this: We let the timer expire every `get_ping_freq()` seconds. When that happens, we check up on this client, using
+	his `last_activity` field, which is updated by `read_data()` (see `read_msgs.c`) everytime new data arrives to the socket. `last_activity` is a time
+	stamp holding the last known time when a message from this client arrived from the socket. If the difference between the current time and `last_activity`
+	is greater than `get_ping_freq()`, then `get_ping_freq()` seconds have elapsed since the last period of activity, and it is time to send a PING message.
+	When we send a PING message, this client's connection state is switched to `STATUS_TIMEOUT`, meaning we are waiting for a PONG reply. As a consequence,
+	the timer is set to expire after `get_timeout()` seconds, which is typically much lower than `get_ping_freq()` (around 10 secs., for example). Thus, the next
+	time we enter the callback function, using `connection_status`, we can know if we have sent a ping to this client before. If that is the case, and the timeout
+	time has elapsed, then it means we didn't get a PONG (or any other message) reply, and we assume this connection is dead. `terminate_session()` is called, and
+	the client is removed from the server.
+	In any other case, we just reset back the timer to expire after `get_ping_freq()` seconds, and the whole cycle repeats.
+   @param w Pointer to this client's time watcher. A pointer to the client is obtained with `(struct irc_client *) ((char *)w - offsetof(struct irc_client, time_watcher))`. 
+			This pointer manipulation is necessary to extract the client's structure where `w` is embedded. In doubt, read about `offsetof()` macro in `stddef.h`'s manpage.
+   @param revents libev's flags. Not used for this specific callback.
+*/
+static void ping_timer_cb(EV_P_ ev_timer *w, int revents) {
+	char ping_msg[MAX_MSG_SIZE+1];
+	struct irc_client *client;
+	int size;
+	ev_tstamp after;
+	client = (struct irc_client*)((char*)w - offsetof(struct irc_client, time_watcher));
+    after = client->last_activity - ev_now(client->ev_loop) + get_ping_freq();
+	if (after < 0.) {
+		if (client->connection_status == STATUS_OK) {
+			/* Hey, you there? */
+			size = cmd_print_reply(ping_msg, sizeof(ping_msg), "PING :%s\r\n", get_server_name());
+			client->connection_status = STATUS_TIMEOUT;
+			(void) write_to(client, ping_msg, (size_t) size);
+			ev_timer_set(w, get_timeout(), 0.);
+			ev_timer_start(client->ev_loop, w);
+		}
+		else {
+			/* Oops! */
+			terminate_session(client, TIMEOUT_QUIT_MSG);
+		}
+	}
+    else {
+		/* There was recent activity, reset timer */
+		ev_timer_set(w, get_ping_freq(), 0.);
+        ev_timer_start(client->ev_loop, w);
+    }
 }
 
 /** This function is set by the thread init function (`new_client()`) as the cleanup handler for `pthread_exit()`, thus,
@@ -305,7 +394,6 @@ void destroy_client(void *arg)
 	if (client->is_registered) {
 		client_list_delete(client);
 	}
-	/* TODO Notify other clients on the same channel that this client is leaving */
 	free_client(client);
 }
 
@@ -327,6 +415,7 @@ static void free_client(struct irc_client *client)
 	free(client->username);
 	free(client->server);
 	free(client->public_host);
+	free(client->channels);
 	if (client_queue_destroy(&client->write_queue) == -1) {
 		fprintf(stderr, "Warning: client_queue_destroy() reported an error - THIS SHOULD NEVER HAPPEN!\n");
 	}
@@ -339,7 +428,8 @@ static void free_client(struct irc_client *client)
 	/* Stop the callback mechanism for this client */
 	ev_io_stop(client->ev_loop, &client->io_watcher);
 	ev_async_stop(client->ev_loop, &client->async_watcher);
-
+	ev_timer_stop(client->ev_loop, &client->time_watcher);
+	
 	ev_break(client->ev_loop, EVBREAK_ONE); /* Stop iterating */
 	ev_loop_destroy(client->ev_loop);
 	free(client);

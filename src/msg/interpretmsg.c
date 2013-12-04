@@ -25,12 +25,14 @@
    @author Fabio Ribeiro
    @date November 2013
    @see parsemsg.c
+   @todo Implement channel listing in WHOIS command
  */
 
 /** A macro to count the number of elements in an array. Remember that arrays decay into pointers in an expression; as a
    consequence, when passed to other functions, arrays are seen as pointers and this macro will wrongly expand to
-   `sizeof(&a[0])/sizeof(a[0])`, i.e., `sizeof(a)` will be interpreted as the size of an element of type `(typeof(a[0])
- *)` */
+   `sizeof(&a[0])/sizeof(a[0])`, i.e., `sizeof(a)` will be interpreted as the size of an element of type 
+   `(typeof(a[0]) *)` 
+*/
 #define array_count(a) (sizeof(a) / sizeof(*a))
 
 /** A trie used to store function pointers to process every commands issued by registered connections */
@@ -61,6 +63,7 @@ void cmd_whois(struct irc_client *client, char *prefix, char *cmd, char *params[
 void cmd_join(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size);
 void cmd_part(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size);
 void cmd_list(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size);
+void cmd_pong(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size);
 
 /** The core processing functions. This array holds as many `struct cmd_func` instances as the number of commands
    available for unregistered connections. Developers adding new commands to yaIRCd for unregistered users only need to
@@ -69,7 +72,8 @@ void cmd_list(struct irc_client *client, char *prefix, char *cmd, char *params[]
  */
 static const struct cmd_func cmds_unregistered[] = {
 	{ "nick", cmd_nick_unregistered },
-	{ "user", cmd_user_unregistered }
+	{ "user", cmd_user_unregistered },
+	{ "pong", cmd_pong }
 };
 
 /** This array holds the commands for registered connections. Each entry is an instance of `struct cmd_func`, thus, this
@@ -85,7 +89,8 @@ static const struct cmd_func cmds_registered[] = {
 	{ "whois", cmd_whois },
 	{ "join", cmd_join },
 	{ "part", cmd_part },
-	{ "list", cmd_list }
+	{ "list", cmd_list },
+	{ "pong", cmd_pong }
 };
 
 /** Processes a `NICK` command for an unregistered connection.
@@ -140,7 +145,8 @@ void cmd_nick_unregistered(struct irc_client *client, char *prefix, char *cmd, c
 		send_err_erroneusnickname(client, params[0]);
 		return;
 	case LST_NO_MEM:
-		pthread_exit(NULL);
+		terminate_session(client, NO_MEM_QUIT_MSG);
+		return;
 	case LST_ALREADY_EXISTS:
 		send_err_nicknameinuse(client, params[0]);
 		return;
@@ -152,7 +158,8 @@ void cmd_nick_unregistered(struct irc_client *client, char *prefix, char *cmd, c
 	if ((client->nick = strdup(params[0])) == NULL) {
 		/* No memory for this client's nick, sorry! */
 		client_list_delete(client);
-		pthread_exit(NULL);
+		terminate_session(client, NO_MEM_QUIT_MSG);
+		return;
 	}
 	if (client->nick != NULL && client->username != NULL && client->realname != NULL) {
 		client->is_registered = 1;
@@ -196,7 +203,8 @@ void cmd_user_unregistered(struct irc_client *client, char *prefix, char *cmd, c
 		if (client->nick != NULL) {
 			client_list_delete(client);
 		}
-		pthread_exit(NULL);
+		terminate_session(client, NO_MEM_QUIT_MSG);
+		return;
 	}
 	if (client->nick != NULL && client->username != NULL && client->realname != NULL) {
 		client->is_registered = 1;
@@ -205,6 +213,27 @@ void cmd_user_unregistered(struct irc_client *client, char *prefix, char *cmd, c
 	}
 }
 
+/** Processes a `PONG` command, resulting from a previous PING request issued by the server.
+	@param client The client who issued the command.
+	@param prefix Null terminated characters sequence holding the command's prefix, as returned by `parse_msg()`.
+	@param cmd Null terminated characters sequence holding the command itself, as returned by `parse_msg()`.
+	@param params An array of pointers to null terminated characters sequences, each one holding a parameter passed
+	   in the IRC message arrived from `client`, as returned by `parse_msg()`.
+	@param params_size How many elements are stored in `params`, as returned by `parse_msg()`.
+	@todo
+	The following errors are described in the protocol as possible replies to this command, but have not been
+	   implemented yet:
+	<ul>
+	<li>
+		`ERR_NOSUCHSERVER` (description: "&lt;server name&gt; :No such server") - Used to indicate the server name given currently does not exist. Since we do not have remote servers, this error is never reported to a client.
+	</li>
+	</ul>
+*/
+void cmd_pong(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size) { 
+	if (params_size < 1) {
+		send_err_noorigin(client);
+	}
+}
 
 void cmd_nick_registered(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size)
 {
@@ -226,9 +255,34 @@ void cmd_user_registered(struct irc_client *client, char *prefix, char *cmd, cha
 	send_err_alreadyregistred(client);
 }
 
+/** Processes a `QUIT` command for a registered connection.
+	QUIT commands are processed like any other commands. This function will go through the parameteres sequence,
+	as returned by `parse_msg()`, to see if a quit message was provided. If no quit message is provided,
+	`DEFAULT_QUIT_MSG`, as defined in `protocol.h`, is assumed.
+	If a quit message is provided, it is copied to a temporary buffer and prefixed with `QUIT_MSG_PREFIX`,
+	for the reasons explained in `protocol.h`.
+	This function uses `terminate_session()` to actually close the connection.
+	@param client The client who issued the command.
+	@param prefix Null terminated characters sequence holding the command's prefix, as returned by `parse_msg()`.
+	@param cmd Null terminated characters sequence holding the command itself, as returned by `parse_msg()`.
+	@param params An array of pointers to null terminated characters sequences, each one holding a parameter passed
+	   in the IRC message arrived from `client`, as returned by `parse_msg()`.
+	@param params_size How many elements are stored in `params`, as returned by `parse_msg()`.
+*/
 void cmd_quit(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size)
 {
-	/* TODO implement QUIT command */
+	char quit_msg[MAX_QUITMSG_LENGTH];
+	char *msg;
+	
+	if (params_size >= 1) {
+		strcpy(quit_msg, QUIT_MSG_PREFIX);
+		strncat(quit_msg, params[0], sizeof(quit_msg)-sizeof(QUIT_MSG_PREFIX)-2);
+		msg = quit_msg;
+	}
+	else {
+		msg = DEFAULT_QUIT_MSG;
+	}
+	terminate_session(client, msg);
 }
 
 /** Callback function used by `cmd_privmsg()` when a PRIVMSG command is issued on a one-to-one private conversation. The
@@ -484,6 +538,9 @@ void cmd_join(struct irc_client *client, char *prefix, char *cmd, char *params[]
 		fprintf(
 			stderr,
 			"::interpretmsg.c:interpret_msg(): No memory to allocate new channel, ignoring request.\n");
+		break;
+	case CHAN_LIMIT_EXCEEDED:
+		send_err_toomanychannels(client, params[0]);
 		break;
 	}
 }

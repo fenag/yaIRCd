@@ -1,6 +1,7 @@
 #include <libconfig.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ev.h>
 #include "serverinfo.h"
 
 /** @file
@@ -51,6 +52,7 @@ struct server_info {
 	const char *net_name; /**<Network name */
 	int socket_max_hangup_clients; /**<Max. hangup clients allowed to be on hold while the parent thread dispatches
 	                                  a new thread to deal with a freshly arrived connection */
+	int chanlimit; /**<How many channels a client is allowed to sit in simultaneously */
 	struct admin_info admin; /**<Server administrator info. See the documentation for `struct admin_info`. */
 	struct socket_info socket_standard; /**<Information about the standard (plaintext) socket. See the documentation
 	                                       for `struct socket_info`. */
@@ -60,6 +62,8 @@ struct server_info {
 	const char *certificate_path; /**<File path for the certificate file used for secure connections. */
 	const char *private_key_path; /**<File path for the server's private key. */
 	const char *motd_file_path; /**<MOTD file path */
+	ev_tstamp ping_freq; /**<If no activity is detected in a connection after `ping_freq` seconds, a PING is sent. */
+	ev_tstamp timeout; /**<If no PONG reply arrives within `timeout` seconds, the session is terminated. */
 };
 
 /** Global server info structure holding every meta information about the IRCd. */
@@ -79,6 +83,9 @@ static config_t cfg;
  */
 int loadServerInfo(void)
 {
+	double ping_freq;
+	double timeout;
+	
 	config_setting_t *setting;
 	config_init(&cfg);
 
@@ -121,10 +128,16 @@ int loadServerInfo(void)
 	info->cloaking.keys_length[0] = strlen(info->cloaking.keys[0]);
 	info->cloaking.keys_length[1] = strlen(info->cloaking.keys[1]);
 	info->cloaking.keys_length[2] = strlen(info->cloaking.keys[2]);
-
+	
+	/* Timeout block */
+	setting = config_lookup(&cfg, "serverinfo.timeouts");
+	config_setting_lookup_float(setting, "ping_freq", &ping_freq);
+	config_setting_lookup_float(setting, "timeout", &timeout);
+	info->ping_freq = ping_freq;
+	info->timeout = timeout;
+	
 	/* Standard socket info */
 	setting = config_lookup(&cfg, "listen.sockets.standard");
-
 	config_setting_lookup_int(setting, "port", &(info->socket_standard.port));
 	config_setting_lookup_int(setting, "max_hangup_clients", &(info->socket_standard.max_hangup_clients));
 	config_setting_lookup_string(setting, "ip", &(info->socket_standard.ip));
@@ -136,10 +149,14 @@ int loadServerInfo(void)
 	config_setting_lookup_int(setting, "max_hangup_clients", &(info->socket_secure.max_hangup_clients));
 	config_setting_lookup_string(setting, "ip", &(info->socket_secure.ip));
 	info->socket_secure.ssl = 1;
-
+	
 	/* Files */
 	setting = config_lookup(&cfg, "files");
 	config_setting_lookup_string(setting, "motd", &(info->motd_file_path));
+	
+	/* Channel block */
+	setting = config_lookup(&cfg, "channels");
+	config_setting_lookup_int(setting, "chanlimit", &(info->chanlimit));
 	return 0;
 }
 
@@ -261,4 +278,25 @@ size_t get_cloak_key_length(int i)
 	return info->cloaking.keys_length[i - 1];
 }
 
+/** Reads the chanlimit setting. A client cannot be in more than `chanlimit` channels simultaneously.
+	@return How many channels, at most, a client can sit in
+*/
+int get_chanlimit(void) {
+	return info->chanlimit;
+}
+
+/** Reads the ping frequency for this server.
+	@return Ping frequency
+*/
+ev_tstamp get_ping_freq(void) {
+	return info->ping_freq;
+}
+
+/** Reads the timeout value for this server.
+	If no PONG reply is received within this amount of time, the client session is to be terminated.
+	@return Timeout value
+*/
+ev_tstamp get_timeout(void) {
+	return info->timeout;
+}
 

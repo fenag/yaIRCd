@@ -15,6 +15,9 @@
 	@date November 2013
 */
 
+/** Server version */
+#define YAIRCD_VERSION "yaIRCd v0.1"
+
 /* Documented in .c source file */
 int loadServerInfo(void);
 void freeServerInfo(void);
@@ -31,4 +34,7 @@ const char *get_priv_key_path(void);
 const char *get_cloak_net_prefix(void);
 const char *get_cloak_key(int i);
 size_t get_cloak_key_length(int i);
+int get_chanlimit(void);
+double get_ping_freq(void);
+double get_timeout(void);
 #endif /* __YAIRCD_SERVINFO_GUARD__ */

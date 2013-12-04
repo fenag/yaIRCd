@@ -161,3 +161,24 @@ void send_err_notonchannel(struct irc_client *client, char *chan)
 	yaircd_send(client, format,
 		    get_server_name(), client->nick, chan);
 }
+
+/** Sends ERR_TOOMANYCHANNELS to a client who tried to join a channel, but already hit the max channels limit, as configured in yaircd.conf.
+   @param client The erratic client to notify
+   @param chan The channel name
+ */
+void send_err_toomanychannels(struct irc_client *client, char *chan) {
+	const char *format =
+		":%s " ERR_TOOMANYCHANNELS " %s %s :You have joined too many channels\r\n";
+	yaircd_send(client, format,
+		get_server_name(), client->nick, chan);
+}
+
+/** Sends ERR_NOORIGIN to a PONG reply from a client who didn't indicate the PING origin.
+   @param client The erratic client to notify
+ */
+void send_err_noorigin(struct irc_client *client) {
+	const char *format =
+		":%s " ERR_NOORIGIN " %s :No origin specified\r\n";
+	yaircd_send(client, format,
+		get_server_name(), client->nick);
+}
