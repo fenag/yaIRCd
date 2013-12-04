@@ -15,6 +15,9 @@
 	@date November 2013
 */
 
+/** Server version */
+#define YAIRCD_VERSION "yaIRCd v0.1"
+
 /* Documented in .c source file */
 int loadServerInfo(void);
 void freeServerInfo(void);

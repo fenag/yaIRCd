@@ -53,9 +53,9 @@ void send_welcome(struct irc_client *client)
 
 	yaircd_send(client, format,
 		    get_server_name(), client->nick, client->nick, client->username, client->hostname,
-		    get_server_name(), client->nick, get_server_name(), "v1.0",
-		    get_server_name(), client->nick, "15/11/2013",
-		    get_server_name(), client->nick, get_server_name(), "v1.0", "UMODES=xTR", "CHANMODES=mvil");
+		    get_server_name(), client->nick, get_server_name(), YAIRCD_VERSION,
+		    get_server_name(), client->nick, __DATE__ " " __TIME__,
+		    get_server_name(), client->nick, get_server_name(), YAIRCD_VERSION, "UMODES=xTR", "CHANMODES=mvil");
 }
 
 /** Sends a generic PRIVMSG command notification to a given target. The destination can either be a channel or a user.
