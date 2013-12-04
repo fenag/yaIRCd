@@ -454,13 +454,8 @@ int do_part(struct irc_client *client, char *channel, char *part_msg)
  */
 static void send_msg_to_chan_aux(void *channel_user, void *args)
 {
-	struct chan_user *chanuser;
-	struct irc_channel_wrapper *info;
-
-	chanuser = (struct chan_user*)channel_user;
-	info = (struct irc_channel_wrapper*)args;
-	if (chanuser->user != info->client) {
-		notify_privmsg(info->client, chanuser->user, info->channel, info->msg);
+	if (((struct chan_user*)channel_user)->user != ((struct irc_channel_wrapper*)args)->client) {
+		notify_channel_user(channel_user, args);
 	}
 }
 
@@ -491,8 +486,8 @@ int channel_msg(struct irc_client *from, char *channel, char *msg)
 	int result;
 	args.client = from;
 	args.channel = channel;
-	args.msg = msg;
-	list_find_and_execute(channels, channel, send_msg_to_chan, NULL, &args, NULL, &result);
+	cmd_print_reply(args.irc_reply, sizeof(args.irc_reply), ":%s!%s@%s PRIVMSG %s :%s\r\n", from->nick, from->username, from->public_host, channel, msg);
+	list_find_and_execute(channels, channel, send_msg_to_chan, NULL, (void *) &args, NULL, &result);
 	if (result == 0) {
 		return CHAN_NO_SUCH_CHANNEL;
 	}
