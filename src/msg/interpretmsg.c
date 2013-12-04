@@ -25,7 +25,6 @@
    @author Fabio Ribeiro
    @date November 2013
    @see parsemsg.c
-   @todo Commands are now recognized by serial comparison. Discuss if a trie approach is benefitial.
  */
 
 /** A macro to count the number of elements in an array. Remember that arrays decay into pointers in an expression; as a

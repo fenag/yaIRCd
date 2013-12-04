@@ -511,7 +511,7 @@ void list_each_channel(struct irc_client *client)
 	list_for_each(channels, list_channel, client);
 	
 	size = cmd_print_reply(msg, sizeof(msg),
-				":%s " RPL_LISTEND " %s :End of LIST",
+				":%s " RPL_LISTEND " %s :End of LIST\r\n",
 				get_server_name(), client->nick);
 				
 	(void)write_to(client, msg, size);

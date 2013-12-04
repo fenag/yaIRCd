@@ -61,6 +61,14 @@ struct destroy_args_wrapper {
 	void (*free_func)(void *); /**<Original freeing function passed to `init_word_list()`. */
 };
 
+/**
+ * @todo fabio doc this
+ */
+struct function_and_arg {
+	void (*f)(void*, void*);
+	void *args;
+};
+
 /** Function that knows how to delete a trie's node.
    @param node_generic This will always be a pointer to `struct yaircd_node` corresponding to the element being deleted.
    @param arg This will always be of type `struct destroy_args_wrapper `, and it holds important information coming from
@@ -454,13 +462,24 @@ void *list_delete_nolock(Word_list_ptr list, char *word)
 	return ret;
 }
 
+static void unpack_and_execute(void * node, void * pack)
+{
+	struct function_and_arg * function = (struct function_and_arg *)pack;
+	(*function->f)(((struct yaircd_node*)node)->data, function->args);
+}
+
 /**
  * @todo fabio doc this
  */
 void list_for_each(Word_list_ptr list, void (*f)(void *, void *), void *fargs)
 {
+	struct function_and_arg function;
+	
+	function.f = f;
+	function.args = fargs;  
+	
 	pthread_mutex_lock(&list->mutex);
-	trie_for_each(list->trie, f, fargs);
+	trie_for_each(list->trie, unpack_and_execute, &function);
 	pthread_mutex_unlock(&list->mutex);
 	return;
 }
