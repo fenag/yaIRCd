@@ -17,11 +17,19 @@
 	@date November 2013
 */
 
+/** `STATUS_OK` means we're not waiting for any particular PONG reply. This is the most typical value for `connection_status` field in the client's structure. */
+#define STATUS_OK 0
+/** `STATUS_TIMEOUT` means we've sent a PING request to this client and are waiting for the corresponding PONG reply. */
+#define STATUS_TIMEOUT 1
 
 /** The structure that describes an IRC client */
 struct irc_client {
 	struct ev_io io_watcher; /**<io watcher for this client's socket. This watcher will be responsible for calling the appropriate callback function when there is interesting data to read from the socket. */
 	struct ev_async async_watcher; /**<async watcher used to wake up a client's thread when there is new data queued and waiting to be sent. */
+	struct ev_timer time_watcher; /**<A time watcher that calls a function every `get_ping_freq()` seconds to send a possible PING message to the client, if no other activity was detected recently.
+									  Once a PING is sent, the timer is set to expire after `get_timeout()` seconds; if no PONG reply arrives in between, the connection is assumed to be dead, and the
+									  client's session is terminated. See `ping_timer_cb()` */
+	ev_tstamp last_activity; /**<Timestamp for the last activity on this connection. This is updated everytime new data is read from the socket. */
 	struct ev_loop *ev_loop; /**<libev loop for this client's thread. Each thread holds its own loop. */
 	struct msg_queue write_queue; /**<Write queue that holds messages waiting to be sent. @see client_queue.h */
 	char *realname; /**<GECOS field. */
@@ -37,6 +45,7 @@ struct irc_client {
 	unsigned is_registered : 1; /**<bit field indicating if this client has registered his connection. */
 	unsigned uses_ssl : 1; /**<bit field indicating if this client is using a secure connection. */
 	unsigned host_reversed : 1; /**<bit field indicating if we were able to reverse lookup this client's IP address. If this field is not set, then `hostname` holds an IP address, otherwise, a hostname. */
+	unsigned connection_status : 1; /**<bit field indicating the connection status: `STATUS_OK` in normal situations; `STATUS_TIMEOUT` if we're waiting for a PONG reply from a previous PING. */
 	int socket_fd; /**<the socket descriptor used to communicate with this client. */
 	SSL *ssl; /**<main SSL structure, created per establish connection. */
 };

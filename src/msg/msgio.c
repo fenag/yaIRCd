@@ -16,7 +16,7 @@
    @date November 2013
  */
 
-/** Similar to `write_to()`, but in case of socket error, `pthread_exit()` is called.
+/** Similar to `write_to()`, but in case of socket error, `terminate_session()` is called using `BAD_WRITE_QUIT_MSG` as a quit message.
    @param client The client to read from.
    @param buf Buffer to store the message read.
    @param len Maximum length of the message. This is usually bounded by the size of `buf`. This parameter avoids buffer
@@ -29,7 +29,7 @@ inline void write_to_noerr(struct irc_client *client, char *buf, size_t len)
 	}
 }
 
-/** Similar to `read_from()`, but in case of socket error, `pthread_exit()` is called.
+/** Similar to `read_from()`, but in case of socket error, `terminate_session()` is called using `BAD_READ_QUIT_MSG` as a quit message.
    @param client The client to read from.
    @param buf Buffer to store the message read.
    @param len Maximum length of the message. This is usually bounded by the size of `buf`. This parameter avoids buffer

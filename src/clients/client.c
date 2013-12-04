@@ -39,6 +39,7 @@ static void free_client(struct irc_client *client);
 static struct irc_client *create_client(struct irc_client_args_wrapper *args);
 void free_thread_arguments(struct irc_client_args_wrapper *);
 static void queue_async_cb(EV_P_ ev_async *w, int revents);
+static void ping_timer_cb(EV_P_ ev_timer *w, int revents);
 
 /** Accepts a new client's connection. This function is indirectly called by the threads scheduler. When a new client
    pops in, the main process allocates a new thread whose init function is this one.
@@ -64,7 +65,7 @@ void *new_client(void *args)
 	pthread_cleanup_push(destroy_client, (void*)client);
 	/* At this point, we have:
 	        - A client structure successfully allocated
-	        - An events loop and 2 watchers - IO watcher and async watcher
+	        - An events loop and 4 watchers - IO watcher, async watcher, and timers for PING
 	        - A thread's cleanup handler to exit gracefully
 	   Let the party begin!
 	 */
@@ -72,6 +73,9 @@ void *new_client(void *args)
 	ev_io_start(client->ev_loop, &client->io_watcher);
 	ev_async_init(&client->async_watcher, queue_async_cb);
 	ev_async_start(client->ev_loop, &client->async_watcher);
+	client->last_activity = ev_now(client->ev_loop);
+	ev_init(&client->time_watcher, ping_timer_cb);
+	ping_timer_cb(client->ev_loop, &client->time_watcher, 0);
 	ev_run(client->ev_loop, 0); /* Go */
 
 	/* This is never reached, but we need to pair up push() and pop() calls */
@@ -124,7 +128,7 @@ static void manage_client_messages(EV_P_ ev_io *watcher, int revents)
 			"::client.c:manage_client_messages(): EV_READ not present, but there was no EV_ERROR, ignoring message\n");
 		return;
 	}
-	client = (struct irc_client*)watcher;
+	client = (struct irc_client*)((char*)watcher - offsetof(struct irc_client, io_watcher));
 
 	read_data(client);
 
@@ -196,6 +200,7 @@ static struct irc_client *create_client(struct irc_client_args_wrapper *args)
 	new_client->hostname = NULL;
 	new_client->public_host = NULL;
 	new_client->channels_count = 0;
+	new_client->connection_status = STATUS_OK;
 	initialize_irc_message(&new_client->last_msg);
 
 	yaircd_send(new_client, ":%s NOTICE AUTH :*** Looking up your hostname...\r\n", get_server_name());
@@ -288,10 +293,38 @@ void terminate_session(struct irc_client *client, char *quit_msg) {
 	int size;
 	char err_msg[MAX_MSG_SIZE+1];
 	size = cmd_print_reply(err_msg, sizeof(err_msg), "ERROR :Closing Link: %s[%s] (%s)\r\n",
-				client->nick, client->hostname, quit_msg);
+				(client->is_registered ? client->nick : "*"), client->hostname, quit_msg);
 	(void) write_to(client, err_msg, size);
 	do_quit(client, quit_msg);
 	pthread_exit(NULL); /* Calls destroy_client() */
+}
+
+static void ping_timer_cb(EV_P_ ev_timer *w, int revents) {
+	char ping_msg[MAX_MSG_SIZE+1];
+	struct irc_client *client;
+	int size;
+	ev_tstamp after;
+	client = (struct irc_client*)((char*)w - offsetof(struct irc_client, time_watcher));
+    after = client->last_activity - ev_now(client->ev_loop) + get_ping_freq();
+	if (after < 0.) {
+		if (client->connection_status == STATUS_OK) {
+			/* Hey, you there? */
+			size = cmd_print_reply(ping_msg, sizeof(ping_msg), ":%s PING %s\r\n", get_server_name(), get_server_name());
+			client->connection_status = STATUS_TIMEOUT;
+			(void) write_to(client, ping_msg, (size_t) size);
+			ev_timer_set(w, get_timeout(), 0.);
+			ev_timer_start(client->ev_loop, w);
+		}
+		else {
+			/* Oops! */
+			terminate_session(client, TIMEOUT_QUIT_MSG);
+		}
+	}
+    else {
+		/* There was recent activity, reset timer */
+		ev_timer_set(w, get_ping_freq(), 0.);
+        ev_timer_start(client->ev_loop, w);
+    }
 }
 
 /** This function is set by the thread init function (`new_client()`) as the cleanup handler for `pthread_exit()`, thus,
@@ -377,7 +410,8 @@ static void free_client(struct irc_client *client)
 	/* Stop the callback mechanism for this client */
 	ev_io_stop(client->ev_loop, &client->io_watcher);
 	ev_async_stop(client->ev_loop, &client->async_watcher);
-
+	ev_timer_stop(client->ev_loop, &client->time_watcher);
+	
 	ev_break(client->ev_loop, EVBREAK_ONE); /* Stop iterating */
 	ev_loop_destroy(client->ev_loop);
 	free(client);

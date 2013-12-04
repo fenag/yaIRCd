@@ -62,6 +62,7 @@ void cmd_privmsg(struct irc_client *client, char *prefix, char *cmd, char *param
 void cmd_whois(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size);
 void cmd_join(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size);
 void cmd_part(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size);
+void cmd_pong(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size);
 
 /** The core processing functions. This array holds as many `struct cmd_func` instances as the number of commands
    available for unregistered connections. Developers adding new commands to yaIRCd for unregistered users only need to
@@ -70,7 +71,8 @@ void cmd_part(struct irc_client *client, char *prefix, char *cmd, char *params[]
  */
 static const struct cmd_func cmds_unregistered[] = {
 	{ "nick", cmd_nick_unregistered },
-	{ "user", cmd_user_unregistered }
+	{ "user", cmd_user_unregistered },
+	{ "pong", cmd_pong }
 };
 
 /** This array holds the commands for registered connections. Each entry is an instance of `struct cmd_func`, thus, this
@@ -85,7 +87,8 @@ static const struct cmd_func cmds_registered[] = {
 	{ "privmsg", cmd_privmsg },
 	{ "whois", cmd_whois },
 	{ "join", cmd_join },
-	{ "part", cmd_part }
+	{ "part", cmd_part },
+	{ "pong", cmd_pong }
 };
 
 /** Processes a `NICK` command for an unregistered connection.
@@ -208,6 +211,9 @@ void cmd_user_unregistered(struct irc_client *client, char *prefix, char *cmd, c
 	}
 }
 
+void cmd_pong(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size) { 
+	/* We don't have to do nothing in here, since the read operation updated last_activity and connection_status */
+}
 
 void cmd_nick_registered(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size)
 {

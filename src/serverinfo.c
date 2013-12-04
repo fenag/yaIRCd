@@ -1,6 +1,7 @@
 #include <libconfig.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ev.h>
 #include "serverinfo.h"
 
 /** @file
@@ -61,8 +62,8 @@ struct server_info {
 	const char *certificate_path; /**<File path for the certificate file used for secure connections. */
 	const char *private_key_path; /**<File path for the server's private key. */
 	const char *motd_file_path; /**<MOTD file path */
-	double ping_freq; /**<If no activity is detected in a connection after `ping_freq` seconds, a PING is sent. */
-	double timeout; /**<If no PONG reply arrives within `timeout` seconds, the session is terminated. */
+	ev_tstamp ping_freq; /**<If no activity is detected in a connection after `ping_freq` seconds, a PING is sent. */
+	ev_tstamp timeout; /**<If no PONG reply arrives within `timeout` seconds, the session is terminated. */
 };
 
 /** Global server info structure holding every meta information about the IRCd. */
@@ -82,6 +83,9 @@ static config_t cfg;
  */
 int loadServerInfo(void)
 {
+	double ping_freq;
+	double timeout;
+	
 	config_setting_t *setting;
 	config_init(&cfg);
 
@@ -127,8 +131,10 @@ int loadServerInfo(void)
 	
 	/* Timeout block */
 	setting = config_lookup(&cfg, "serverinfo.timeouts");
-	config_setting_lookup_float(setting, "ping_freq", &(info->ping_freq));
-	config_setting_lookup_float(setting, "timeout", &(info->timeout));
+	config_setting_lookup_float(setting, "ping_freq", &ping_freq);
+	config_setting_lookup_float(setting, "timeout", &timeout);
+	info->ping_freq = ping_freq;
+	info->timeout = timeout;
 	
 	/* Standard socket info */
 	setting = config_lookup(&cfg, "listen.sockets.standard");
@@ -282,7 +288,7 @@ int get_chanlimit(void) {
 /** Reads the ping frequency for this server.
 	@return Ping frequency
 */
-double get_ping_freq(void) {
+ev_tstamp get_ping_freq(void) {
 	return info->ping_freq;
 }
 
@@ -290,7 +296,7 @@ double get_ping_freq(void) {
 	If no PONG reply is received within this amount of time, the client session is to be terminated.
 	@return Timeout value
 */
-double get_timeout(void) {
+ev_tstamp get_timeout(void) {
 	return info->timeout;
 }
 

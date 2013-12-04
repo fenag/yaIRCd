@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <ev.h>
 #include "read_msgs.h"
 #include "client.h"
 #include "msgio.h"
@@ -74,6 +75,9 @@ void read_data(struct irc_client *client)
 	client_msg->index += read_from_noerr(client,
 					     client_msg->msg + client_msg->index,
 					     sizeof(client_msg->msg) - client_msg->index);
+	/* We got something new, update activity timestamp for this client */
+	client->last_activity = ev_now(client->ev_loop);
+	client->connection_status = STATUS_OK;
 }
 
 /** Analyzes the incoming messages buffer and the information read from the socket to determine if there's any IRC

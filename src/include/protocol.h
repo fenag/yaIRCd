@@ -418,6 +418,9 @@
 /** Default quit message */
 #define DEFAULT_QUIT_MSG "Client exited"
 
+/** Quit message for ping timeout */
+#define TIMEOUT_QUIT_MSG "Ping timeout"
+
 /** Quit message for resource allocation errors
 	(e.g. no memory to store client's nick or user)
 */
