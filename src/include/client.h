@@ -32,7 +32,8 @@ struct irc_client {
 	char *server; /**<this client's server ip address. `NULL` if it's a local client. */
 	char **channels; /**<A dynamically allocated array of `char *` holding a list of the channels this client is in. Free positions hold a NULL pointer. */
 	int channels_count; /**<How many channels he joined, i.e., how many positions in `channels` are taken (not NULL). */
-	struct irc_message last_msg; /**<last IRC message received coming from this client. This structure will be filled as we read this client's socket, and when an entire message is finished reading, this structure will contain the necessary information. */
+	struct irc_message last_msg; /**<last IRC message received coming from this client. This structure will be filled as we read this client's socket, and when an entire message is finished reading, this structure
+									 will contain the necessary information. */
 	unsigned is_registered : 1; /**<bit field indicating if this client has registered his connection. */
 	unsigned uses_ssl : 1; /**<bit field indicating if this client is using a secure connection. */
 	unsigned host_reversed : 1; /**<bit field indicating if we were able to reverse lookup this client's IP address. If this field is not set, then `hostname` holds an IP address, otherwise, a hostname. */
@@ -57,5 +58,6 @@ struct irc_client_args_wrapper {
 
 /* Documented in client.c */		
 void *new_client(void *args);
+void terminate_session(struct irc_client *client, char *quit_msg);
 
 #endif /* __IRC_CLIENT_GUARD__ */

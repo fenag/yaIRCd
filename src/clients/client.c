@@ -264,6 +264,16 @@ static void queue_async_cb(EV_P_ ev_async *w, int revents)
 	flush_queue(client, &client->write_queue);
 }
 
+void terminate_session(struct irc_client *client, char *quit_msg) {
+	int size;
+	char err_msg[MAX_MSG_SIZE+1];
+	size = cmd_print_reply(err_msg, sizeof(err_msg), "ERROR :Closing Link: %s[%s] (%s)\r\n",
+				client->nick, client->hostname, quit_msg);
+	(void) write_to(client, err_msg, size);
+	do_quit(client, quit_msg);
+	pthread_exit(NULL); /* Calls destroy_client() */
+}
+
 /** This function is set by the thread init function (`new_client()`) as the cleanup handler for `pthread_exit()`, thus,
    this is called when a fatal error with this client occurred andhe needs to be kicked out of the server.
    Examples of fatal errors are: we were writing to his socket and processing a command he sent and suddenly the
@@ -301,7 +311,6 @@ static void queue_async_cb(EV_P_ ev_async *w, int revents)
  */
 void destroy_client(void *arg)
 {
-	char *quit_msg = DEFAULT_QUIT_MSG;
 	struct irc_client *client = (struct irc_client*)arg;
 	/* First, we HAVE to delete this client from the clients list, no matter what.
 	   Why? Because if we delete him, we know for sure that no other thread will be able to reach him and
@@ -314,7 +323,6 @@ void destroy_client(void *arg)
 	if (client->is_registered) {
 		client_list_delete(client);
 	}
-	do_quit(client, quit_msg);
 	free_client(client);
 }
 

@@ -140,7 +140,8 @@ void cmd_nick_unregistered(struct irc_client *client, char *prefix, char *cmd, c
 		send_err_erroneusnickname(client, params[0]);
 		return;
 	case LST_NO_MEM:
-		pthread_exit(NULL);
+		terminate_session(client, NO_MEM_QUIT_MSG);
+		return;
 	case LST_ALREADY_EXISTS:
 		send_err_nicknameinuse(client, params[0]);
 		return;
@@ -152,7 +153,8 @@ void cmd_nick_unregistered(struct irc_client *client, char *prefix, char *cmd, c
 	if ((client->nick = strdup(params[0])) == NULL) {
 		/* No memory for this client's nick, sorry! */
 		client_list_delete(client);
-		pthread_exit(NULL);
+		terminate_session(client, NO_MEM_QUIT_MSG);
+		return;
 	}
 	if (client->nick != NULL && client->username != NULL && client->realname != NULL) {
 		client->is_registered = 1;
@@ -196,7 +198,8 @@ void cmd_user_unregistered(struct irc_client *client, char *prefix, char *cmd, c
 		if (client->nick != NULL) {
 			client_list_delete(client);
 		}
-		pthread_exit(NULL);
+		terminate_session(client, NO_MEM_QUIT_MSG);
+		return;
 	}
 	if (client->nick != NULL && client->username != NULL && client->realname != NULL) {
 		client->is_registered = 1;
@@ -228,17 +231,18 @@ void cmd_user_registered(struct irc_client *client, char *prefix, char *cmd, cha
 
 void cmd_quit(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size)
 {
-	char err_msg[MAX_MSG_SIZE+1];
-	int size;
-	/* The server acknowledges a voluntary QUIT by sending an ERROR message to the client. */
-	size = cmd_print_reply(err_msg, sizeof(err_msg), "ERROR :Closing Link: %s[%s] (%s)\r\n",
-				client->nick, client->hostname, DEFAULT_QUIT_MSG);
-	(void) write_to(client, err_msg, size);
-	/* We call pthread_exit() here, which will call destroy_client(), since we pushed it to the thread's cleanup handler
-	   in the beginning with pthread_cleanup_push().
-	   destroy_client() will call do_quit() to notify other clients about this client's death.
-	 */
-	pthread_exit(NULL);
+	char quit_msg[MAX_QUITMSG_LENGTH];
+	char *msg;
+	
+	if (params_size >= 1) {
+		strcpy(quit_msg, QUIT_MSG_PREFIX);
+		strncat(quit_msg, params[0], sizeof(quit_msg)-sizeof(QUIT_MSG_PREFIX)-2);
+		msg = quit_msg;
+	}
+	else {
+		msg = DEFAULT_QUIT_MSG;
+	}
+	terminate_session(client, msg);
 }
 
 /** Callback function used by `cmd_privmsg()` when a PRIVMSG command is issued on a one-to-one private conversation. The

@@ -25,7 +25,7 @@
 inline void write_to_noerr(struct irc_client *client, char *buf, size_t len)
 {
 	if (write_to(client, buf, len) == -1) {
-		pthread_exit(NULL);
+		terminate_session(client, BAD_WRITE_QUIT_MSG);
 	}
 }
 
@@ -40,7 +40,7 @@ inline ssize_t read_from_noerr(struct irc_client *client, char *buf, size_t len)
 {
 	ssize_t msg_size;
 	if ((msg_size = read_from(client, buf, len)) <= 0) {
-		pthread_exit(NULL);
+		terminate_session(client, BAD_READ_QUIT_MSG);
 	}
 	return msg_size;
 }
