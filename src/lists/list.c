@@ -25,6 +25,7 @@
    It is a very interesting and recommendable exercise to go through the trie implementation. Interested readers are
       invited to look at trie.c.
    @author Filipe Goncalves
+   @author Fabio Ribeiro
    @date November 2013
    @see trie.c
  */
@@ -451,4 +452,15 @@ void *list_delete_nolock(Word_list_ptr list, char *word)
 	ret = node->data;
 	free_yaircd_node((void*)node, NULL);
 	return ret;
+}
+
+/**
+ * @todo fabio doc this
+ */
+void list_for_each(Word_list_ptr list, void (*f)(void *, void *), void *fargs)
+{
+	pthread_mutex_lock(&list->mutex);
+	trie_for_each(list->trie, f, fargs);
+	pthread_mutex_unlock(&list->mutex);
+	return;
 }

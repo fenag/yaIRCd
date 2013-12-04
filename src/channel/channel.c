@@ -21,6 +21,7 @@
    Note that `static` functions, that is, internal functions only used in this file, are NOT thread-safe, since it is
       assumed they are invoked from within the other public,thread-safe functions.
    @author Filipe Goncalves
+   @author Fabio Ribeiro
    @date November 2013
  */
 
@@ -273,7 +274,7 @@ static void *join_newchan(void *args)
 	}
 	new_chan->users_count = 1;
 	new_chan->modes = 0;
-	new_chan->topic = "This is an example channel";
+	new_chan->topic = "This is an example ";
 	join_ack(info->client, new_chan);
 	return (void*)new_chan;
 }
@@ -473,4 +474,45 @@ int channel_msg(struct irc_client *from, char *channel, char *msg)
 		return CHAN_NO_SUCH_CHANNEL;
 	}
 	return 0;
+}
+
+/**
+ * @todo fabio doc this
+ */
+static void list_channel(void *data, void *args)
+{
+	char msg[MAX_MSG_SIZE + 1];
+	int size;
+	irc_channel_ptr channel;
+	struct irc_client * client;
+	
+	channel = (irc_channel_ptr)data;
+	client = (struct irc_client*)args;
+
+	size = cmd_print_reply(msg, sizeof(msg),
+					":%s " RPL_LIST " %s %s %d :%s\r\n",
+					get_server_name(), 
+					client->nick, 
+					channel->name, 
+					channel->users_count, 
+					channel->topic);
+					
+	(void)write_to(client, msg, size);
+}
+
+/**
+ * @todo fabio doc this
+ */
+void list_each_channel(struct irc_client *client)
+{
+	char msg[MAX_MSG_SIZE + 1];
+	int size;
+	
+	list_for_each(channels, list_channel, client);
+	
+	size = cmd_print_reply(msg, sizeof(msg),
+				":%s " RPL_LISTEND " %s :End of LIST",
+				get_server_name(), client->nick);
+				
+	(void)write_to(client, msg, size);
 }

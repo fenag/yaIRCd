@@ -9,6 +9,7 @@
 	A thread-safe channel list is kept. With the exception of `chan_init()` and `chan_destroy()`, it is safe to call every function declared in this header file concurrently.
 	
 	@author Filipe Goncalves
+	@author Fabio Ribeiro
 	@date November 2013
 */
 
@@ -33,5 +34,6 @@ void chan_destroy(void);
 int do_join(struct irc_client *client, char *channel);
 int do_part(struct irc_client *client, char *channel, char *part_msg);
 int channel_msg(struct irc_client *from, char *channel, char *msg);
+void list_each_channel(struct irc_client *client);
 
 #endif /* __YAIRCD_CHANNEL_GUARD__ */

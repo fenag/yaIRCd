@@ -22,6 +22,7 @@
    function will interpret the message, decide if it's valid, and generate the appropriate command reply, or error
    reply if it was an invalid message.
    @author Filipe Goncalves
+   @author Fabio Ribeiro
    @date November 2013
    @see parsemsg.c
    @todo Commands are now recognized by serial comparison. Discuss if a trie approach is benefitial.
@@ -60,6 +61,7 @@ void cmd_privmsg(struct irc_client *client, char *prefix, char *cmd, char *param
 void cmd_whois(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size);
 void cmd_join(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size);
 void cmd_part(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size);
+void cmd_list(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size);
 
 /** The core processing functions. This array holds as many `struct cmd_func` instances as the number of commands
    available for unregistered connections. Developers adding new commands to yaIRCd for unregistered users only need to
@@ -83,7 +85,8 @@ static const struct cmd_func cmds_registered[] = {
 	{ "privmsg", cmd_privmsg },
 	{ "whois", cmd_whois },
 	{ "join", cmd_join },
-	{ "part", cmd_part }
+	{ "part", cmd_part },
+	{ "list", cmd_list }
 };
 
 /** Processes a `NICK` command for an unregistered connection.
@@ -523,6 +526,15 @@ void cmd_part(struct irc_client *client, char *prefix, char *cmd, char *params[]
 		send_err_notonchannel(client, params[0]);
 		break;
 	}
+}
+
+/**
+ * @todo fabio doc this
+ * @todo params
+ */
+void cmd_list(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size)
+{
+	list_each_channel(client);
 }
 
 /** Defines what is a valid character for a command. We only allow alphabetic characters to be part of a command.

@@ -21,6 +21,7 @@
 	It is a very interesting and recommendable exercise to go through the trie implementation. Interested readers are invited to look at trie.c.
 	
 	@author Filipe Goncalves
+	@author Fabio Ribeiro
 	@date November 2013
 	@see trie.c
 */
@@ -54,5 +55,6 @@ int list_add(Word_list_ptr list, void *data, char *word);
 int list_add_nolock(Word_list_ptr list, void *data, char *word);
 void *list_delete(Word_list_ptr list, char *word);
 void *list_delete_nolock(Word_list_ptr list, char *word);
+void list_for_each(Word_list_ptr list, void (*f)(void *, void *), void *fargs);
 
 #endif /* __YAIRCD_GENERIC_LIST_GUARD__ */
