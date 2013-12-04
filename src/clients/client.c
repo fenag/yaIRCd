@@ -257,9 +257,8 @@ static struct irc_client *create_client(struct irc_client_args_wrapper *args)
       willqueue the message into B's queue, and call `async_send()` on B's async watcher, to wake B up. When B wakes up,
       this function is called.
    Therefore, the main purpose of this function is to flush a client's queue.
-   @param w Pointer to this client's async watcher. A pointer to the client is obtained with `(struct irc_client )
-      ((char )w - offsetof(struct irc_client, async_watcher))`. This pointer manipulation is necessary to extract the
-      client's structure where `w` is embedded. In doubt, read about `offsetof()` macro in `stddef.h`'s manpage.
+   @param w Pointer to this client's async watcher. A pointer to the client is obtained with `(struct irc_client *) ((char *)w - offsetof(struct irc_client, async_watcher))`. 
+			This pointer manipulation is necessary to extract the client's structure where `w` is embedded. In doubt, read about `offsetof()` macro in `stddef.h`'s manpage.
    @param revents libev's flags. Not used for async callbacks.
  */
 static void queue_async_cb(EV_P_ ev_async *w, int revents)
@@ -299,6 +298,25 @@ void terminate_session(struct irc_client *client, char *quit_msg) {
 	pthread_exit(NULL); /* Calls destroy_client() */
 }
 
+/** Callback function used by the time watcher for each client.
+	Alright now, listen up, this is important. We have carefully followed libev's documentation suggestions, and implemented
+	the 3rd method described in this section: http://pod.tst.eu/http://cvs.schmorp.de/libev/ev.pod#code_ev_timer_code_relative_and_opti
+	We use a timer for each client, stored in the client's structure, and also a connection_status bit-field. See the definition for the client's
+	structure in `client.h` for further information.
+	The basic layout goes like this: We let the timer expire every `get_ping_freq()` seconds. When that happens, we check up on this client, using
+	his `last_activity` field, which is updated by `read_data()` (see `read_msgs.c`) everytime new data arrives to the socket. `last_activity` is a time
+	stamp holding the last known time when a message from this client arrived from the socket. If the difference between the current time and `last_activity`
+	is greater than `get_ping_freq()`, then `get_ping_freq()` seconds have elapsed since the last period of activity, and it is time to send a PING message.
+	When we send a PING message, this client's connection state is switched to `STATUS_TIMEOUT`, meaning we are waiting for a PONG reply. As a consequence,
+	the timer is set to expire after `get_timeout()` seconds, which is typically much lower than `get_ping_freq()` (around 10 secs., for example). Thus, the next
+	time we enter the callback function, using `connection_status`, we can know if we have sent a ping to this client before. If that is the case, and the timeout
+	time has elapsed, then it means we didn't get a PONG (or any other message) reply, and we assume this connection is dead. `terminate_session()` is called, and
+	the client is removed from the server.
+	In any other case, we just reset back the timer to expire after `get_ping_freq()` seconds, and the whole cycle repeats.
+   @param w Pointer to this client's time watcher. A pointer to the client is obtained with `(struct irc_client *) ((char *)w - offsetof(struct irc_client, time_watcher))`. 
+			This pointer manipulation is necessary to extract the client's structure where `w` is embedded. In doubt, read about `offsetof()` macro in `stddef.h`'s manpage.
+   @param revents libev's flags. Not used for this specific callback.
+*/
 static void ping_timer_cb(EV_P_ ev_timer *w, int revents) {
 	char ping_msg[MAX_MSG_SIZE+1];
 	struct irc_client *client;
