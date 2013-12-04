@@ -264,6 +264,26 @@ static void queue_async_cb(EV_P_ ev_async *w, int revents)
 	flush_queue(client, &client->write_queue);
 }
 
+/** Called by the rest of the code everytime a client's session must be terminated. The reason for terminating a
+	client's session can be a voluntary QUIT, broken pipe, socket read or write error, connection lost, ping
+	timeout; in other words, any condition that makes it impossible to communicate to this client.
+	The code calling this function shall provide a proper quit message, depending on where the situation arised.
+	See `protocol.h` to learn some possible, built-in quit messages.
+	Either way, this function starts by trying to notify the client about this action, using the `ERROR` command,
+	as described in the protocol. The exact syntax of the message sent to the client follows this form:
+	`ERROR :Closing Link: &lt;nick&gt;[&lt;hostname&gt;] (&lt;quit message&gt;)`.
+	Whether the write is successfull or not is irrelevant, after attempting to notify the client about this,
+	the function calls `do_quit()`, to let every other client sharing a channel with this one that he's leaving,
+	and finally, `pthread_exit()` is called to free every resource allocated to this client and kill the thread.
+	@param client The client to disconnect.
+	@param quit_msg The quit message. This must be a valid pointer to a null-terminated characters sequence with
+	the quit message. Since no `free()`'s are performed on this parameter, it must NOT be a dynamically allocated pointer.
+	Typically, this will be a pointer to a string constant defined in `protocol.h` if the event triggering the QUIT
+	was an error on the server side. Otherwise, it is ok for this parameter to be a pointer to a local variable
+	stored in the stack of the calling function, as is the case with `cmd_quit()` in `interpretmsg.c`.
+	@note No other place in the code should call `pthread_exit()`. Always use this function to terminate a client's
+	session.
+*/
 void terminate_session(struct irc_client *client, char *quit_msg) {
 	int size;
 	char err_msg[MAX_MSG_SIZE+1];

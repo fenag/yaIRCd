@@ -229,6 +229,20 @@ void cmd_user_registered(struct irc_client *client, char *prefix, char *cmd, cha
 	send_err_alreadyregistred(client);
 }
 
+/** Processes a `QUIT` command for a registered connection.
+	QUIT commands are processed like any other commands. This function will go through the parameteres sequence,
+	as returned by `parse_msg()`, to see if a quit message was provided. If no quit message is provided,
+	`DEFAULT_QUIT_MSG`, as defined in `protocol.h`, is assumed.
+	If a quit message is provided, it is copied to a temporary buffer and prefixed with `QUIT_MSG_PREFIX`,
+	for the reasons explained in `protocol.h`.
+	This function uses `terminate_session()` to actually close the connection.
+	@param client The client who issued the command.
+	@param prefix Null terminated characters sequence holding the command's prefix, as returned by `parse_msg()`.
+	@param cmd Null terminated characters sequence holding the command itself, as returned by `parse_msg()`.
+	@param params An array of pointers to null terminated characters sequences, each one holding a parameter passed
+	   in the IRC message arrived from `client`, as returned by `parse_msg()`.
+	@param params_size How many elements are stored in `params`, as returned by `parse_msg()`.
+*/
 void cmd_quit(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size)
 {
 	char quit_msg[MAX_QUITMSG_LENGTH];

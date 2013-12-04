@@ -111,6 +111,15 @@ void chan_destroy(void)
 	destroy_word_list(channels, LIST_NO_FREE_NODE_DATA);
 }
 
+/** Notifies a user in a channel with a generic complete IRC message passed through `args`. 
+	To do so, it enqueues a new IRC message into `to_notify`'s messages queue and sends a libev async signal to his thread.
+	This function is used by `JOIN`, `QUIT`, `PART`, `PRIVMSG`, and other channel commands that must be propagated to every user
+	in a channel.
+	@param to_notify_generic A pointer to a client structure denoting the client to notify. This client is inside the channel.
+	@param args A `struct irc_channel_wrapper *` holding a valid null terminated characters sequence in the field `irc_reply`.
+				This sequence will be enqueued to `to_notify_generic`'s messages write queue, thus, it must be a
+				valid IRC message.
+ */
 static void notify_channel_user(void *to_notify_generic, void *args) {
 	struct irc_client *to_notify = ((struct chan_user *) to_notify_generic)->user;
 	struct irc_channel_wrapper *info = (struct irc_channel_wrapper *) args;
@@ -118,20 +127,12 @@ static void notify_channel_user(void *to_notify_generic, void *args) {
 	ev_async_send(to_notify->ev_loop, &to_notify->async_watcher);
 }
 
-/** Notifies a user in a channel that another user joined. To do so, it enqueues a new IRC message into `to_notify`'s
-   messages queue and sends a libev async signal to his thread.
-   This function is used by `join_ack_aux()` and called for every client inside a channel (except the new client).
-   @param to_notify A pointer to a client structure denoting the client to notify. This client is inside the channel.
-   @param user_joined A pointer to a client structure holding the user that has just joined.
-   @param chan The channel name.
- */
-
 /** Auxiliary function indirectly used by `join_ack()` that is called for every user inside a channel after a new user
    joins and is added to the channel's userlist.
    For each user inside a channel, an `RPL_NAMREPLY` message is sent to the new user informing him of who is inside the
       channel at the moment, as specified by the RFC.
    This list contains the user himself.
-   For every other client, a join notification is also sent by calling `notify_join()`.
+   For every other client, a join notification is also sent by calling `notify_channel_user()`.
    @param chanuser A pointer to `struct chan_user` denoting the current user in this iteration. `chanuser` is always
       casted to `struct chan_user `.
    @param args A pointer to `struct irc_channel_wrappers` that shall contain the client where the join request
@@ -246,7 +247,7 @@ static void *join_newchan(void *args)
 	}
 	new_chan->users_count = 1;
 	new_chan->modes = 0;
-	new_chan->topic = "This is an example channel";
+	new_chan->topic = "No topic. yaIRCd doesn't support TOPIC command yet!";
 	join_ack(info->client, new_chan);
 	return (void*)new_chan;
 }
@@ -347,6 +348,15 @@ static void destroy_channel(irc_channel_ptr chan)
 	free(chan);
 }
 
+/** Callback function used by `do_quit()` and `do_part()` to process the event triggered for a client leaving a
+	channel.
+	This function will delete the client from the channel's user list, and notify every other channel user about this.
+	If the channel becomes empty as a result of this user leaving, `destroy_channel()` is called.
+	@param channel An `irc_channel_ptr` holding the target channel.
+	@param args A `struct irc_channel_wrapper *` which must hold a valid pointer to the client leaving in the
+				`client` field.
+	@return `NULL` if the user was not on the channel, `args` otherwise.
+*/	
 static void *leave_channel(void *channel, void *args)
 {
 	irc_channel_ptr chan;
@@ -377,7 +387,6 @@ static void *leave_channel(void *channel, void *args)
 		<li>Finally, the channel name is removed from this user's channels list</li>
 	</ul>
    @param client The client where the QUIT request came from.
-   @param channel Channel name.
    @param quit_msg Quit message. The code using this function should always provide a quit message.
    This must be a valid null terminated characters sequence.
  */
