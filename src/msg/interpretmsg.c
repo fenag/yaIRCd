@@ -211,8 +211,26 @@ void cmd_user_unregistered(struct irc_client *client, char *prefix, char *cmd, c
 	}
 }
 
+/** Processes a `PONG` command, resulting from a previous PING request issued by the server.
+	@param client The client who issued the command.
+	@param prefix Null terminated characters sequence holding the command's prefix, as returned by `parse_msg()`.
+	@param cmd Null terminated characters sequence holding the command itself, as returned by `parse_msg()`.
+	@param params An array of pointers to null terminated characters sequences, each one holding a parameter passed
+	   in the IRC message arrived from `client`, as returned by `parse_msg()`.
+	@param params_size How many elements are stored in `params`, as returned by `parse_msg()`.
+	@todo
+	The following errors are described in the protocol as possible replies to this command, but have not been
+	   implemented yet:
+	<ul>
+	<li>
+		`ERR_NOSUCHSERVER` (description: "&lt;server name&gt; :No such server") - Used to indicate the server name given currently does not exist. Since we do not have remote servers, this error is never reported to a client.
+	</li>
+	</ul>
+*/
 void cmd_pong(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size) { 
-	/* We don't have to do nothing in here, since the read operation updated last_activity and connection_status */
+	if (params_size < 1) {
+		send_err_noorigin(client);
+	}
 }
 
 void cmd_nick_registered(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size)

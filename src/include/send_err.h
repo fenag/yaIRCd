@@ -25,4 +25,5 @@ void send_err_nosuchnick(struct irc_client *client, char *nick);
 void send_err_nosuchchannel(struct irc_client *client, char *chan);
 void send_err_notonchannel(struct irc_client *client, char *chan);
 void send_err_toomanychannels(struct irc_client *client, char *chan);
+void send_err_noorigin(struct irc_client *client);
 #endif /* __YAIRCD_SEND_ERR_GUARD__ */

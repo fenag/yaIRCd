@@ -309,7 +309,7 @@ static void ping_timer_cb(EV_P_ ev_timer *w, int revents) {
 	if (after < 0.) {
 		if (client->connection_status == STATUS_OK) {
 			/* Hey, you there? */
-			size = cmd_print_reply(ping_msg, sizeof(ping_msg), ":%s PING %s\r\n", get_server_name(), get_server_name());
+			size = cmd_print_reply(ping_msg, sizeof(ping_msg), "PING :%s\r\n", get_server_name());
 			client->connection_status = STATUS_TIMEOUT;
 			(void) write_to(client, ping_msg, (size_t) size);
 			ev_timer_set(w, get_timeout(), 0.);

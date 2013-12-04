@@ -172,3 +172,13 @@ void send_err_toomanychannels(struct irc_client *client, char *chan) {
 	yaircd_send(client, format,
 		get_server_name(), client->nick, chan);
 }
+
+/** Sends ERR_NOORIGIN to a PONG reply from a client who didn't indicate the PING origin.
+   @param client The erratic client to notify
+ */
+void send_err_noorigin(struct irc_client *client) {
+	const char *format =
+		":%s " ERR_NOORIGIN " %s :No origin specified\r\n";
+	yaircd_send(client, format,
+		get_server_name(), client->nick);
+}
