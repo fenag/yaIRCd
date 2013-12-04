@@ -35,4 +35,6 @@ const char *get_cloak_net_prefix(void);
 const char *get_cloak_key(int i);
 size_t get_cloak_key_length(int i);
 int get_chanlimit(void);
+double get_ping_freq(void);
+double get_timeout(void);
 #endif /* __YAIRCD_SERVINFO_GUARD__ */
