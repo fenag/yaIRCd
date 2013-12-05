@@ -382,6 +382,51 @@ void cmd_privmsg(struct irc_client *client, char *prefix, char *cmd, char *param
 	}
 }
 
+
+
+/* whois auxiliar para os channels
+ * DOCUMENT THIS */
+static void cmd_whois_aux_channels(struct irc_client *client)
+{
+	int i;
+	char buffer[MAX_MSG_SIZE];
+	char *buf_ptr;
+	char *ptr_begin;
+	
+	ptr_begin  = buffer;
+	
+	ptr_begin+=cmd_print_reply(buffer, sizeof(buffer), ":%s " RPL_WHOISCHANNELS " %s %s :", get_server_name(), client->nick, client->nick);
+	buf_ptr=ptr_begin;
+
+	for(i=0; i<get_chanlimit();i++){
+		if(client->channels[i]==NULL){
+			continue;
+		}
+		
+		if((buffer+sizeof(buffer)-buf_ptr-2)<strlen(client->channels[i])+1){
+			/*Didn't fit*/
+			buf_ptr[0] = '\r';
+			buf_ptr[1] = '\n';
+			write_to(client,buffer,buf_ptr-buffer+2);
+			buf_ptr=ptr_begin;
+			continue;
+		}
+		buf_ptr+=cmd_print_reply(buf_ptr,(size_t) (buffer+sizeof(buffer)-buf_ptr), "%s ", client->channels[i]);		
+	}
+	if(buf_ptr != ptr_begin) {
+		buf_ptr[0] = '\r';
+		buf_ptr[1] = '\n';
+		write_to(client,buffer,buf_ptr-buffer+2);
+	}
+}
+
+
+
+
+
+
+
+
 /** Callback function used by `client_list_find_and_execute()` when a client issues a WHOIS command.
    This function generates and sends the appropriate WHOIS reply
    @param target_client Client being WHOIS'ed
@@ -408,7 +453,8 @@ static void *cmd_whois_aux(void *target_client, void *args)
 	length = cmd_print_reply(message, sizeof(message), ":%s " RPL_WHOISSERVER " %s %s %s :%s\r\n",
 				 get_server_name(), info->from->nick, target->nick, get_server_name(), get_server_desc());
 	(void)write_to(info->from, message, length);
-	/* TODO Implement RPL_WHOISIDLE and RPL_WHOISCHANNELS */
+	/* TODO Implement RPL_WHOISIDLE */
+	cmd_whois_aux_channels((struct irc_client*) target_client);
 	length = cmd_print_reply(message,
 				 sizeof(message),
 				 ":%s " RPL_ENDOFWHOIS " %s %s :End of WHOIS list\r\n",

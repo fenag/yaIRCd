@@ -88,6 +88,7 @@
    </ul>
    @author Filipe Goncalves
    @author Fabio Ribeiro
+   @author Bruno Lopes
    @date November 2013
    @todo See how to daemonize properly. Read http://www-theorie.physik.unizh.ch/~dpotter/howto/daemonize
  */
@@ -117,7 +118,7 @@ static void ssl_connection_cb(EV_P_ ev_io *w, int revents);
 /**
    This is where everything with SSL is initialized
    @return `1` on error; `0` otherwise
-   @warning irc clients must use a ssl protocol version compatible with SSLv23
+   @warning irc clients must use a compatible ssl protocol version (SSLv2, SSLv3, or TLSv1)
  */
 int initSSL(void)
 {
