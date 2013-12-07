@@ -1,0 +1,42 @@
+Hi, welcome to yaIRCd development server.
+
+This is in an early development stage, please stay sharp.
+
+ASCII art rulezZzZ!
+
+ \     /     /\      _______ |-------   |--------  ---------|
+  \   /     /  \        |    |      |   |            |      |
+   \ /     /____\       |    |______|   |            |      |
+    |     /______\      |    |      \   |            |      |
+    |    /        \     |    |       \  |            |      |
+    |   /          \ ___|___ |        \ |--------  ---------|	
+
+Take it easy on us, we're coding this thingy from scratch.
+
+Here's a list of the commands currently supported by this server:
+
+* JOIN
+* PART
+* PRIVMSG, both to channels and to another user
+* WHOIS (no idle time reports yet)
+* LIST
+* QUIT
+* NICK and USER, but only for unregistered connections (NICK on registered connections is not supported yet, i.e., you can't change your nick after connecting, sorry!)
+
+Some standard features are missing from the default commands. For example, PRIVMSG only supports a single target, not a list of targets. Masks are not allowed.
+
+The same happens for WHOIS.
+
+The server will PING you every minute just to make sure the connection is still alive.
+
+No channel operators, bans, topic, ircops, and any other common IRC feature has been implemented. No IRC extensions, no capabilities, no remote linking, no services, nothing.
+
+Still a lot of work to do.
+
+However, a team of highly trained monkeys has been dispatched to deal with this otherwise unpleasant situation.
+
+
+The yaIRCd team,
+Fill
+techupper
+brunolopes446

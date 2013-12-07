@@ -18,6 +18,15 @@
 /** Server version */
 #define YAIRCD_VERSION "yaIRCd v0.1"
 
+/** A generic MOTD entry type used by the rest of the code */
+#define MOTD_ENTRY char **
+
+/** MOTD entries iterator. Assumes a MOTD exists, i.e., the code using this should explicitly test for `motd != NULL` before. */
+#define motd_entry_for_each(motd, ptr) for (ptr = motd; *ptr != NULL; ptr++)
+
+/** Knows how to access a MOTD's entry line */
+#define motd_entry_line(m) (*(m))
+
 /* Documented in .c source file */
 int loadServerInfo(void);
 void freeServerInfo(void);
@@ -37,4 +46,5 @@ size_t get_cloak_key_length(int i);
 int get_chanlimit(void);
 double get_ping_freq(void);
 double get_timeout(void);
+MOTD_ENTRY get_motd(void);
 #endif /* __YAIRCD_SERVINFO_GUARD__ */

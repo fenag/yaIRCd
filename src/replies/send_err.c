@@ -182,3 +182,13 @@ void send_err_noorigin(struct irc_client *client) {
 	yaircd_send(client, format,
 		get_server_name(), client->nick);
 }
+
+/** Sends ERR_NOMOTD to a client when there is no MOTD to display (no MOTD file exists).
+   @param client The client to notify
+ */
+void send_err_nomotd(struct irc_client *client) {
+	const char *format =
+		":%s " ERR_NOMOTD " %s :MOTD File is missing\r\n";
+	yaircd_send(client, format,
+		get_server_name(), client->nick);
+}

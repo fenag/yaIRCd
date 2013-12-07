@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ev.h>
+#include <stdio.h>
+#include <protocol.h>
 #include "serverinfo.h"
 
 /** @file
@@ -18,6 +20,9 @@
 
 /** Configuration file path */
 #define CONFIG_FILE "yaircd.conf"
+
+/** How many memory to allocate initially to store MOTD line entries */
+#define INITIAL_MOTD_LINES 64
 
 /** Stores important information about a socket. */
 struct socket_info {
@@ -61,16 +66,95 @@ struct server_info {
 	struct cloaks_info cloaking; /**<Cloaked hosts information. See the documentation for `struct cloaks_info`. */
 	const char *certificate_path; /**<File path for the certificate file used for secure connections. */
 	const char *private_key_path; /**<File path for the server's private key. */
-	const char *motd_file_path; /**<MOTD file path */
 	ev_tstamp ping_freq; /**<If no activity is detected in a connection after `ping_freq` seconds, a PING is sent. */
 	ev_tstamp timeout; /**<If no PONG reply arrives within `timeout` seconds, the session is terminated. */
+	char **motd; /**<Dynamically allocated array holding MOTD entries for this server. This array is terminated with a NULL pointer. Each entry is a pointer to a null terminated
+					 characters sequence with a MOTD entry without any newline character. */
 };
 
 /** Global server info structure holding every meta information about the IRCd. */
 static struct server_info *info;
 
-/** libconfig's necessary buffer for path lookups. */
-static config_t cfg;
+/** This function reads the MOTD file specified in the configuration file, and stores it in a convenient way to make it easy to access during the IRCd's lifetime.
+	It will read chunks of `MAX_MOTD_LINE_LENGTH` characters from the MOTD file, and store each chunk in a `MOTD_ENTRY` container. As of this writing,
+	the container is nothing more than a dynamically allocated array of characters that grows as needed.
+	This function will allocate memory to hold every MOTD line, where each line is at most `MAX_MOTD_LINE_LENGTH` characters, without couting with newline or null terminator
+	characters.
+	Every MOTD line is processed, newline characters such as \\r and \\n are removed, and every sequence is null terminated.
+	The end of the array is indicated by a position with a NULL pointer. 
+	The rest of the code should use the macros defined in `serverinfo.h` to iterate through this dynamic array and access its values.
+	@param cfg libconfig's configuration structure in use
+	@return A `MOTD_ENTRY` object that shall be manipulated with the appropriate macros defined in `serverinfo.h`
+*/
+MOTD_ENTRY read_motd_file(config_t *cfg) {
+	config_setting_t *setting;
+	const char *motd_file_path;
+	char line_buf[MAX_MOTD_LINE_LENGTH+1];
+	FILE *motd_file;
+	int line_size;
+	MOTD_ENTRY motd;
+	MOTD_ENTRY motd_new_ptr;
+	int motd_scale;
+	int motd_pos;
+	
+	motd = malloc(sizeof(*motd)*INITIAL_MOTD_LINES);
+	motd_scale = 1;
+	motd_pos = 0;
+	
+	if (motd == NULL) {
+		return NULL;
+	}
+	setting = config_lookup(cfg, "files");
+	/* Grab motd file path */
+	config_setting_lookup_string(setting, "motd", &motd_file_path);
+	
+	if ((motd_file = fopen(motd_file_path, "r")) == NULL) {
+		perror("Could not open MOTD file");
+		free(motd);
+		return NULL;
+	}
+	
+	while (fgets(line_buf, sizeof(line_buf), motd_file) != NULL) {
+		line_size = strlen(line_buf);
+		/* Assert: line_size <= sizeof(line_buf)-1 */
+		if (line_size > 0 && line_buf[line_size-1] == '\n') {
+			line_size--;
+		}
+		if (line_size > 0 && line_buf[line_size-1] == '\r') {
+			line_size--;
+		}
+		line_buf[line_size] = '\0';
+		if (motd_pos+1 >= motd_scale*INITIAL_MOTD_LINES) {
+			/* Oops! Need more memory! */
+			motd_new_ptr = realloc((void *) motd, (motd_scale *= 2)*INITIAL_MOTD_LINES*sizeof(*motd));
+			if (motd_new_ptr == NULL) {
+				fprintf(stderr, "::serverinfo.c:read_motd_file(): Not enough memory to store MOTD.\n");
+				free(motd[motd_pos-1]);
+				motd[motd_pos-1] = NULL;
+				fclose(motd_file);
+				return motd;
+			}
+			motd = motd_new_ptr;
+		}
+		if ((motd[motd_pos] = malloc(line_size+1)) == NULL) {
+			fprintf(stderr, "::serverinfo.c:read_motd_file(): Not enough memory to store MOTD line.\n");
+			motd[motd_pos] = NULL;
+			fclose(motd_file);
+			return motd;
+		}
+		strcpy(motd[motd_pos], line_buf);
+		motd_pos++;
+	}
+	/* assert: motd_pos < motd_scale*INITIAL_MOTD_LINES */
+	motd[motd_pos] = NULL;
+	
+	if (ferror(motd_file)) {
+		fprintf(stderr, "::serverinfo.c:read_motd_file(): Error on file.\n");
+	}
+	
+	fclose(motd_file);
+	return motd;
+}
 
 /**
    Using libconfig, this function creates and populates a `struct server_info` which is going to hold information about
@@ -85,7 +169,7 @@ int loadServerInfo(void)
 {
 	double ping_freq;
 	double timeout;
-	
+	config_t cfg;
 	config_setting_t *setting;
 	config_init(&cfg);
 
@@ -150,25 +234,14 @@ int loadServerInfo(void)
 	config_setting_lookup_string(setting, "ip", &(info->socket_secure.ip));
 	info->socket_secure.ssl = 1;
 	
-	/* Files */
-	setting = config_lookup(&cfg, "files");
-	config_setting_lookup_string(setting, "motd", &(info->motd_file_path));
-	
 	/* Channel block */
 	setting = config_lookup(&cfg, "channels");
 	config_setting_lookup_int(setting, "chanlimit", &(info->chanlimit));
-	return 0;
-}
+	
+	/* Read and store MOTD file */
+	info->motd = read_motd_file(&cfg);
 
-/**
-   This is where the mem allocated during the load of the configuration file is freed. You might have noticed we didn't
-      use any buffer while calling `config_setting_lookup_TYPE()`. This means that if you call this function too soon,
-      you might come across a mean, still beautiful, segmentation fault (just if you try to access the info contained in
-      the struct we have populated during the `loadServerInfo()` call).
- */
-void freeServerInfo(void)
-{
-	config_destroy(&cfg);
+	return 0;
 }
 
 /** Reads this server's name.
@@ -300,3 +373,6 @@ ev_tstamp get_timeout(void) {
 	return info->timeout;
 }
 
+MOTD_ENTRY get_motd(void) {
+	return info->motd;
+}

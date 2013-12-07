@@ -33,6 +33,9 @@
 /** Max. quit message length. Must be greater than `QUIT_MSG_PREFIX` */
 #define MAX_QUITMSG_LENGTH 64
 
+/** Max. number of characters in a MOTD line, without \\r\\n terminators */
+#define MAX_MOTD_LINE_LENGTH 80
+
 /* End protocol limits */
 
 /* Error replies */

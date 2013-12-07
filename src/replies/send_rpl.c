@@ -1,5 +1,6 @@
 #include "serverinfo.h"
 #include "msgio.h"
+#include "send_err.h"
 #include "send_rpl.h"
 
 /** @file
@@ -13,30 +14,22 @@
 
 /** Sends MOTD to a client.
    @param client The client to send MOTD to.
-   @todo Make this configurable, including the server name.
  */
 void send_motd(struct irc_client *client)
 {
-	const char *format =
-		":%s " RPL_MOTDSTART " %s :- %s Message of the day - \r\n"
-		":%s " RPL_MOTD " %s :- Hello, welcome to this IRC server.\r\n"
-		":%s " RPL_MOTD " %s :- This is an experimental server with very few features implemented.\r\n"
-		":%s " RPL_MOTD " %s :- Only PRIVMSG is allowed at the moment, sorry!\r\n"
-		":%s " RPL_MOTD
-		" %s :- A team of highly trained monkeys has been dispatched to deal with this unpleasant situation.\r\n"
-		":%s " RPL_MOTD
-		" %s :- For now, there's really nothing you can do besides guessing who's online and PRIVMSG'ing them.\r\n"
-		":%s " RPL_MOTD " %s :- Good luck! :P\r\n"
-		":%s " RPL_ENDOFMOTD " %s :End of /MOTD command\r\n";
-	yaircd_send(client, format,
-		    get_server_name(), client->nick, get_server_name(),
-		    get_server_name(), client->nick,
-		    get_server_name(), client->nick,
-		    get_server_name(), client->nick,
-		    get_server_name(), client->nick,
-		    get_server_name(), client->nick,
-		    get_server_name(), client->nick,
-		    get_server_name(), client->nick);
+	const char *format_begin = ":%s " RPL_MOTDSTART " %s :- %s Message of the day - \r\n";
+	const char *format_end = ":%s " RPL_ENDOFMOTD " %s :End of /MOTD command\r\n";
+	MOTD_ENTRY motd;
+	MOTD_ENTRY motd_iterator;
+	if ((motd = get_motd()) == NULL) {
+		send_err_nomotd(client);
+		return;
+	}
+	yaircd_send(client, format_begin, get_server_name(), client->nick, get_server_name());
+	motd_entry_for_each(motd, motd_iterator) {
+		yaircd_send(client, ":%s " RPL_MOTD " %s :- %s\r\n", get_server_name(), client->nick, motd_entry_line(motd_iterator));
+	}
+	yaircd_send(client, format_end, get_server_name(), client->nick);
 }
 
 /** Sends the welcome message to a newly registred user
