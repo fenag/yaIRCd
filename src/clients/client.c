@@ -30,7 +30,6 @@
    @author Filipe Goncalves
    @author Fabio Ribeiro
    @date November 2013
-   @todo Implement timeouts
  */
 
 static void manage_client_messages(EV_P_ ev_io *watcher, int revents);

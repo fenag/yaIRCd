@@ -25,7 +25,6 @@
    @author Fabio Ribeiro
    @date November 2013
    @see parsemsg.c
-   @todo Implement channel listing in WHOIS command
  */
 
 /** A macro to count the number of elements in an array. Remember that arrays decay into pointers in an expression; as a
@@ -631,8 +630,14 @@ void cmd_part(struct irc_client *client, char *prefix, char *cmd, char *params[]
 }
 
 /**
- * @todo fabio doc this
- * @todo params
+ * Processes a 'LIST' command.
+ * @param client The client who issued the command.
+ * @param prefix Null terminated characters sequence holding the command's prefix, as returned by `parse_msg()`.
+ * @param cmd Null terminated characters sequence holding the command itself, as returned by `parse_msg()`.
+ * @param params An array of pointers to null terminated characters sequences, each one holding a parameter passed
+ * in the IRC message arrived from `client`, as returned by `parse_msg()`.
+ * @param params_size How many elements are stored in `params`, as returned by `parse_msg()`.
+ * @todo The list command is partially implemented. Consider implementing <targets> (check RFC) by the time multiple nodes are a reality in the yaIRCd. 
  */
 void cmd_list(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size)
 {

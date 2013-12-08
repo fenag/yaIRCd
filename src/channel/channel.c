@@ -506,7 +506,9 @@ int channel_msg(struct irc_client *from, char *channel, char *msg)
 }
 
 /**
- * @todo fabio doc this
+ * This function sends to the client a line denoting information about the channel, in response to a LIST command.
+ * @param data The channel data
+ * @param args The client who invoked the LIST command.
  */
 static void list_channel(void *data, void *args)
 {
@@ -530,7 +532,8 @@ static void list_channel(void *data, void *args)
 }
 
 /**
- * @todo fabio doc this
+ * This function lists every channel available and a line denoting the end of the list of the channels, in response to a LIST command.
+ * @param client The client who invoked the LIST command.
  */
 void list_each_channel(struct irc_client *client)
 {
