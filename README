@@ -1,18 +1,16 @@
 --- WARNING ---
 
-This is an ongoing project. It is still in an early development stage. IRC Clients can only:
+This is an ongoing project. It is still in an early development stage. IRC Clients can only use the following commands:
 
-- Connect to the server
-- Disconnect from the server
-- Join a channel
-- Part a channel
-- Talk to a channel
-- Use private message
-- Issue WHOIS commands
+* JOIN
+* PART
+* PRIVMSG, both to channels and to another user
+* WHOIS (no idle time reports yet)
+* LIST
+* QUIT
+* NICK and USER, but only for unregistered connections (NICK on registered connections is not supported yet, i.e., you can't change your nick after connecting, sorry!)
 
 No other commands are implemented yet. There are no channel modes, no operators, nothing.
-QUIT command is not fully implemented yet; quit events are not spread to other clients, which means that someone who quits will show up on the channel user's list forever, because the server doesn't notify
-other channel clients about QUITS.
 
 Dependencies:
 libpthread
@@ -35,4 +33,4 @@ To run:
 After that, open up a few terminals and try:
 telnet 127.0.0.1 6667
 
-Or open up an IRC client and connect to the server. No commands other than NICK, USER and QUIT are implemented. NICK only works for registering the connection.
+Or use an IRC client.
