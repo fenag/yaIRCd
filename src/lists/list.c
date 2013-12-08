@@ -61,10 +61,8 @@ struct destroy_args_wrapper {
 	void (*free_func)(void *); /**<Original freeing function passed to `init_word_list()`. */
 };
 
-/**
- * @todo fabio doc this
- */
-struct function_and_arg {
+/** Wrapper structure to hold a function and the corresponding arguments */
+struct f_and_arg_wrapper {
 	void (*f)(void*, void*);
 	void *args;
 };
@@ -462,18 +460,26 @@ void *list_delete_nolock(Word_list_ptr list, char *word)
 	return ret;
 }
 
+/**
+ * This function is being used to abstract one of the levels of indirection presented in the word list, to execute a given function over the data contained in a yairc_node structure.
+ * @param node A node of the type struct yaircd_node containg information that's going to be passed as the first argument of the function.
+ * @param pack The wrapper containing the function and one of its arguments.
+ */
 static void unpack_and_execute(void * node, void * pack)
 {
-	struct function_and_arg * function = (struct function_and_arg *)pack;
-	(*function->f)(((struct yaircd_node*)node)->data, function->args);
+	struct f_and_arg_wrapper * f_and_arg = (struct f_and_arg_wrapper *)pack;
+	(*f_and_arg->f)(((struct yaircd_node*)node)->data, f_and_arg->args);
 }
 
 /**
- * @todo fabio doc this
+ * A 'upper layer' of trie_for_each (see trie.c) to be used in a concurrent mode to apply a function f to every channel available.
+ * @param list The list containing the trie of struct yaircd_node's (there are two levels of indirection to reach channels' information)
+ * @param f A function to be packed with fargs
+ * @param fargs Arguments to be packed together with f
  */
 void list_for_each(Word_list_ptr list, void (*f)(void *, void *), void *fargs)
 {
-	struct function_and_arg function;
+	struct f_and_arg_wrapper function;
 	
 	function.f = f;
 	function.args = fargs;  
