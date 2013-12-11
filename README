@@ -16,7 +16,7 @@ Dependencies:
 libpthread
 libev (libev4, libev-dev)
 libssl, libcrypto (libssl-dev)
-libconfig
+libconfig (libconfig-dev, libconfig9)
 
 To compile:
 make
