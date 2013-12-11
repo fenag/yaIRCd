@@ -2,6 +2,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <openssl/md5.h>
+#include <openssl/sha.h>
 #include <stdio.h>
 #include "cloak.h"
 #include "serverinfo.h"
@@ -72,10 +73,10 @@
    `hide_host()` */
 #define MAX_HOST_LEN 128
 
-/** Takes 3 salt keys and a text, and stores `md5(md5(salt1+":"text+":"+salt2)+salt3)` into `result`.
+/** Takes 3 salt keys and a text, and stores `md5(sha1(salt1+":"text+":"+salt2)+salt3)` into `result`.
    @param salt1 The key used as a salt to prepend to `":"+text+":"`. Does not have to be null terminated.
    @param salt2 The key used as a salt to append to `":"+text+":"`. Does not have to be null terminated.
-   @param salt3 The key used as a salt to append to `md5(salt1+":"text+":"+salt2)`. Does not have to be null terminated.
+   @param salt3 The key used as a salt to append to `sha1(salt1+":"text+":"+salt2)`. Does not have to be null terminated.
    @param salt1_len `salt1` length, excluding any possible null terminating character
    @param salt2_len `salt2` length, excluding any possible null terminating character
    @param salt3_len `salt3` length, excluding any possible null terminating character
@@ -84,7 +85,7 @@
    @param text_len `text` length, excluding any possible null terminating character
    @param result A pointer to a valid and allocated memory location capable of holding at least `MD5_DIGEST_LENGTH`
       (defined in `openssl/md5.h`) characters, and where the result of evaluating
-      `md5(md5(salt1+":"text+":"+salt2)+salt3)` is stored. The resulting sequence is not null terminated.
+      `md5(sha1(salt1+":"text+":"+salt2)+salt3)` is stored. The resulting sequence is not null terminated.
    @note Upon returning, `result` will hold exactly `MD5_DIGEST_LENGTH` characters.
    @warning `result` is not null terminated.
    @warning `result` shall be a valid and allocated memory location.
@@ -100,14 +101,14 @@ static void do_md5(const char *salt1,
 		   unsigned char result[MD5_DIGEST_LENGTH])
 {
 	char buf1[salt1_len + salt2_len + text_len + 2]; /* +2 because we need space for two ':' */
-	char buf2[MD5_DIGEST_LENGTH + salt3_len];
+	char buf2[SHA_DIGEST_LENGTH + salt3_len];
 	strncpy(buf1, salt1, salt1_len);
 	buf1[salt1_len] = ':';
 	strncpy(buf1 + salt1_len + 1, text, text_len);
 	buf1[salt1_len + text_len + 1] = ':';
 	strncpy(buf1 + salt1_len + text_len + 2, salt2, salt2_len);
-	MD5((const unsigned char*)buf1, sizeof(buf1), (unsigned char*)buf2);
-	strncpy(buf2 + MD5_DIGEST_LENGTH, salt3, salt3_len);
+	SHA1((const unsigned char*)buf1, (unsigned long) sizeof(buf1), (unsigned char*)buf2);
+	strncpy(buf2 + SHA_DIGEST_LENGTH, salt3, salt3_len);
 	MD5((const unsigned char*)buf2, sizeof(buf2), result);
 }
 
