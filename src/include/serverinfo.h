@@ -29,7 +29,6 @@
 
 /* Documented in .c source file */
 int loadServerInfo(void);
-void freeServerInfo(void);
 const char *get_server_name(void);
 const char *get_server_desc(void);
 const char *get_std_socket_ip(void);

@@ -61,10 +61,14 @@ struct destroy_args_wrapper {
 	void (*free_func)(void *); /**<Original freeing function passed to `init_word_list()`. */
 };
 
-/** Wrapper structure to hold a function and the corresponding arguments */
+/** Wrapper structure to hold a function and the corresponding arguments used by `list_for_each()`.
+	This is necessary, because we need to remember which function the original, upper code passed to
+	`list_for_each()` by the time we reach our callback function.
+	See the documentation for `list_for_each()` and `unpack_and_execute()` for further details.
+*/
 struct f_and_arg_wrapper {
-	void (*f)(void*, void*);
-	void *args;
+	void (*f)(void*, void*); /**<The original function passed by the upper code. */
+	void *args; /**<A generic pointer to arguments that shall be passed to `f`. Also provided by the upper code. */
 };
 
 /** Function that knows how to delete a trie's node.
@@ -472,10 +476,10 @@ static void unpack_and_execute(void * node, void * pack)
 }
 
 /**
- * A 'upper layer' of trie_for_each (see trie.c) to be used in a concurrent mode to apply a function f to every channel available.
+ * An 'upper layer' of `trie_for_each()` (see `trie.c`) to be used in a concurrent mode to apply a function `f` to every channel available.
  * @param list The list containing the trie of struct yaircd_node's (there are two levels of indirection to reach channels' information)
- * @param f A function to be packed with fargs
- * @param fargs Arguments to be packed together with f
+ * @param f A function to be packed with `fargs`
+ * @param fargs Arguments to be packed together with `f`
  */
 void list_for_each(Word_list_ptr list, void (*f)(void *, void *), void *fargs)
 {

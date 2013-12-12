@@ -373,6 +373,11 @@ ev_tstamp get_timeout(void) {
 	return info->timeout;
 }
 
+/** Reads the previously stored MOTD information.
+	@return a `MOTD_ENTRY` instance that shall be iterated with the use of `motd_entry_for_each()`.
+			  To get the corresponding line stored in a `MOTD_ENTRY`, use `motd_entry_line()`.
+			  See `serverinfo.h` for further details.
+*/
 MOTD_ENTRY get_motd(void) {
 	return info->motd;
 }
