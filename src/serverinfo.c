@@ -75,6 +75,9 @@ struct server_info {
 /** Global server info structure holding every meta information about the IRCd. */
 static struct server_info *info;
 
+/** Global configuration for the server conf file used by libconfig. This is initialized in `loadServerInfo()` */
+static config_t cfg;
+
 /** This function reads the MOTD file specified in the configuration file, and stores it in a convenient way to make it easy to access during the IRCd's lifetime.
 	It will read chunks of `MAX_MOTD_LINE_LENGTH` characters from the MOTD file, and store each chunk in a `MOTD_ENTRY` container. As of this writing,
 	the container is nothing more than a dynamically allocated array of characters that grows as needed.
@@ -169,7 +172,6 @@ int loadServerInfo(void)
 {
 	double ping_freq;
 	double timeout;
-	config_t cfg;
 	config_setting_t *setting;
 	config_init(&cfg);
 
@@ -187,7 +189,7 @@ int loadServerInfo(void)
 		fprintf(stderr, "::serverinfo.c:loadServerInfo(): Could not allocate memory.\n");
 		return 1;
 	}
-
+	
 	/* Server info */
 	setting = config_lookup(&cfg, "serverinfo");
 	config_setting_lookup_int(setting, "serv_id", &(info->id));
@@ -240,7 +242,7 @@ int loadServerInfo(void)
 	
 	/* Read and store MOTD file */
 	info->motd = read_motd_file(&cfg);
-
+	
 	return 0;
 }
 
