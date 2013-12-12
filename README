@@ -23,7 +23,7 @@ libconfig
 To compile:
 make
 
-To generate documentation:
+To generate documentation (requires Doxygen):
 make doc
 
 To configure, edit yaircd.conf
