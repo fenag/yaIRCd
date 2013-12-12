@@ -21,7 +21,7 @@
 /** Defines the queue size. The queue size determines how many messages are allowed to be on hold waiting to be written to the client's socket.
 	Each client's queue is writable by any other client's thread that wishes to deliver a message to this client. Queue operations are thread safe and reentrant.
 */
-#define WRITE_QUEUE_SIZE 32
+#define WRITE_QUEUE_SIZE 512
 
 /** The structure that holds a queue */
 struct msg_queue {

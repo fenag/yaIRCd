@@ -381,11 +381,18 @@ void cmd_privmsg(struct irc_client *client, char *prefix, char *cmd, char *param
 	}
 }
 
-
-
-/* whois auxiliar para os channels
- * DOCUMENT THIS */
-static void cmd_whois_aux_channels(struct irc_client *client)
+/** Auxiliary function called by `cmd_whois_aux()` to perform channels listing on the target client.
+	This function is smart enough to list channels in a fashion such that no channel names are truncated due
+	to IRC's maximum message length limitations. If the client is on a lot of channels and the whole list
+	does not fit into a message of size `MAX_MSG_SIZE` octets, then `RPL_WHOISCHANNELS` is sent more than once.
+	Channel names will not be split across different `RPL_WHOISCHANNELS`. We check to see if the channel name will
+	fit the space left on our buffer before writing to it; in case it doesn't, we just flush the buffer by writing it
+	to the client's socket, and start all over.
+	@param client The client who issued WHOIS command.
+	@param target_client The target of the WHOIS.
+	@todo Make this thread-safe.
+*/
+static void cmd_whois_aux_channels(struct irc_client *client, struct irc_client *target_client)
 {
 	int i;
 	char buffer[MAX_MSG_SIZE];
@@ -394,37 +401,29 @@ static void cmd_whois_aux_channels(struct irc_client *client)
 	
 	ptr_begin  = buffer;
 	
-	ptr_begin+=cmd_print_reply(buffer, sizeof(buffer), ":%s " RPL_WHOISCHANNELS " %s %s :", get_server_name(), client->nick, client->nick);
+	ptr_begin += cmd_print_reply(buffer, sizeof(buffer), ":%s " RPL_WHOISCHANNELS " %s %s :", get_server_name(), target_client->nick, target_client->nick);
 	buf_ptr=ptr_begin;
 
-	for(i=0; i<get_chanlimit();i++){
-		if(client->channels[i]==NULL){
+	for (i=0; i < get_chanlimit(); i++) {
+		if (target_client->channels[i] == NULL) {
 			continue;
 		}
-		
-		if((buffer+sizeof(buffer)-buf_ptr-2)<strlen(client->channels[i])+1){
-			/*Didn't fit*/
+		if ((buffer+sizeof(buffer)-buf_ptr-2) < strlen(target_client->channels[i])+1) {
+			/* Didn't fit */
 			buf_ptr[0] = '\r';
 			buf_ptr[1] = '\n';
-			write_to(client,buffer,buf_ptr-buffer+2);
-			buf_ptr=ptr_begin;
+			write_to(client, buffer, buf_ptr-buffer+2);
+			buf_ptr = ptr_begin;
 			continue;
 		}
-		buf_ptr+=cmd_print_reply(buf_ptr,(size_t) (buffer+sizeof(buffer)-buf_ptr), "%s ", client->channels[i]);		
+		buf_ptr += cmd_print_reply(buf_ptr, (size_t) (buffer+sizeof(buffer)-buf_ptr), "%s ", target_client->channels[i]);
 	}
 	if(buf_ptr != ptr_begin) {
 		buf_ptr[0] = '\r';
 		buf_ptr[1] = '\n';
-		write_to(client,buffer,buf_ptr-buffer+2);
+		write_to(client, buffer, buf_ptr-buffer+2);
 	}
 }
-
-
-
-
-
-
-
 
 /** Callback function used by `client_list_find_and_execute()` when a client issues a WHOIS command.
    This function generates and sends the appropriate WHOIS reply
@@ -432,6 +431,7 @@ static void cmd_whois_aux_channels(struct irc_client *client)
    @param args A parameter of type `struct cmd_parse` holding information previously obtained by the messages parsing
       routine.
    @return This function always returns `NULL`.
+   @todo Make this thread-safe.
  */
 static void *cmd_whois_aux(void *target_client, void *args)
 {
@@ -453,7 +453,7 @@ static void *cmd_whois_aux(void *target_client, void *args)
 				 get_server_name(), info->from->nick, target->nick, get_server_name(), get_server_desc());
 	(void)write_to(info->from, message, length);
 	/* TODO Implement RPL_WHOISIDLE */
-	cmd_whois_aux_channels((struct irc_client*) target_client);
+	cmd_whois_aux_channels(info->from, (struct irc_client*) target_client);
 	length = cmd_print_reply(message,
 				 sizeof(message),
 				 ":%s " RPL_ENDOFWHOIS " %s %s :End of WHOIS list\r\n",
@@ -637,7 +637,7 @@ void cmd_part(struct irc_client *client, char *prefix, char *cmd, char *params[]
  * @param params An array of pointers to null terminated characters sequences, each one holding a parameter passed
  * in the IRC message arrived from `client`, as returned by `parse_msg()`.
  * @param params_size How many elements are stored in `params`, as returned by `parse_msg()`.
- * @todo The list command is partially implemented. Consider implementing <targets> (check RFC) by the time multiple nodes are a reality in the yaIRCd. 
+ * @todo The list command is partially implemented. Consider implementing &lt;targets&gt; (check RFC) by the time multiple nodes are a reality in yaIRCd. 
  */
 void cmd_list(struct irc_client *client, char *prefix, char *cmd, char *params[], int params_size)
 {
